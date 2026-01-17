@@ -1,7 +1,10 @@
+
 import React, { useState } from 'react';
 import { PlanType, SubjectStream, Medium } from '../types.ts';
 import { useAuth } from '../App.tsx';
 import { SRI_LANKAN_SCHOOLS } from '../constants.ts';
+import { AuthLayout, FormField, AuthButton } from '../components/AuthUI.tsx';
+import { supabase } from '../supabaseClient.ts';
 
 interface RegisterPageProps {
   selectedPlan: PlanType;
@@ -11,7 +14,10 @@ interface RegisterPageProps {
 const RegisterPage: React.FC<RegisterPageProps> = ({ selectedPlan, onLogin }) => {
   const { register } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendStatus, setResendStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [error, setError] = useState('');
+  const [isSuccess, setIsSuccess] = useState(false);
   const [formData, setFormData] = useState({
     fullName: '',
     preferredName: '',
@@ -42,135 +48,127 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ selectedPlan, onLogin }) =>
     if (regError) {
       setError(regError);
       setLoading(false);
+    } else {
+      setIsSuccess(true);
+      setLoading(false);
     }
   };
 
-  const inputClasses = "w-full px-5 py-3.5 rounded-2xl border-2 border-slate-50 bg-slate-50 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 focus:bg-white transition-all font-bold text-slate-800 text-sm placeholder:font-medium disabled:opacity-70";
-  const labelClasses = "text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 ml-1 block mb-1.5";
+  const handleResendEmail = async () => {
+    setResending(true);
+    setResendStatus('idle');
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email: formData.email,
+      });
+      if (resendError) throw resendError;
+      setResendStatus('success');
+    } catch (err: any) {
+      console.error("Resend error:", err);
+      setResendStatus('error');
+    } finally {
+      setResending(false);
+    }
+  };
+
+  if (isSuccess) {
+    return (
+      <AuthLayout title="Check Your Email" subtitle="We've sent a verification link to your inbox.">
+        <div className="px-10 pb-12 text-center space-y-8 animate-fade-up">
+           <div className="w-24 h-24 bg-indigo-50 rounded-full flex items-center justify-center mx-auto text-indigo-600">
+              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+           </div>
+           <div className="space-y-4">
+             <p className="text-slate-600 font-medium leading-relaxed">
+               A verification email has been sent to <span className="font-black text-slate-900">{formData.email}</span>. 
+               Please click the link in the email to activate your account.
+             </p>
+             
+             {resendStatus === 'success' && (
+               <div className="p-3 bg-emerald-50 text-emerald-700 rounded-xl text-[10px] font-black uppercase tracking-widest animate-fade-up">
+                 Email resent successfully!
+               </div>
+             )}
+             {resendStatus === 'error' && (
+               <div className="p-3 bg-red-50 text-red-700 rounded-xl text-[10px] font-black uppercase tracking-widest animate-fade-up">
+                 Failed to resend. Please try again later.
+               </div>
+             )}
+           </div>
+
+           <div className="flex flex-col gap-3">
+             <AuthButton text="Back to Login" onClick={onLogin} type="button" />
+             <button 
+                type="button"
+                disabled={resending}
+                onClick={handleResendEmail}
+                className="w-full py-4 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600 hover:text-indigo-800 transition-colors disabled:opacity-50"
+             >
+               {resending ? 'Resending...' : 'Resend Verification Email'}
+             </button>
+           </div>
+           
+           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Didn't get the email? Check your spam folder.</p>
+        </div>
+      </AuthLayout>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-indigo-50/50 flex items-center justify-center p-6 selection:bg-indigo-100">
-      <div className="bg-white rounded-[3rem] shadow-[0_40px_100px_-20px_rgba(79,70,229,0.1)] w-full max-w-3xl overflow-hidden border border-slate-100">
-        <div className="p-10 bg-indigo-600 text-white flex justify-between items-center relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-20 -mt-20 blur-3xl"></div>
-          <div className="relative z-10">
-            <h2 className="text-3xl font-black tracking-tight mb-1">Create Account</h2>
-            <p className="text-indigo-100 font-medium">Join thousands of Sri Lankan high-achievers.</p>
+    <AuthLayout 
+      title="Enrollment" 
+      subtitle="Join the leading platform for A/L excellence."
+      maxWidth="max-w-2xl"
+    >
+      <form onSubmit={handleSubmit} className="p-10 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+        {error && (
+          <div className="md:col-span-2 p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-[10px] font-black uppercase tracking-wider animate-shake">
+            {error}
           </div>
-          <div className="hidden sm:block relative z-10">
-             <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10">
-                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Tier Selected</p>
-                <p className="text-xl font-black">{formData.plan}</p>
-             </div>
-          </div>
+        )}
+
+        <div className="md:col-span-2">
+          <FormField label="Full Legal Name" value={formData.fullName} onChange={v => setFormData({...formData, fullName: v})} required disabled={loading} placeholder="e.g. Kasun Perera" />
         </div>
-        
-        <form onSubmit={handleSubmit} className="p-10 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-          {error && (
-            <div className="md:col-span-2 p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-xs font-bold">
-              {error}
+
+        <FormField label="Preferred Name" value={formData.preferredName} onChange={v => setFormData({...formData, preferredName: v})} required disabled={loading} placeholder="Kasun" />
+        <FormField label="WhatsApp Number" value={formData.whatsappNo} onChange={v => setFormData({...formData, whatsappNo: v})} required disabled={loading} placeholder="07xxxxxxxx" />
+
+        <div className="md:col-span-2">
+          <FormField 
+            label="School" 
+            select 
+            options={SRI_LANKAN_SCHOOLS} 
+            value={formData.school} 
+            onChange={v => setFormData({...formData, school: v})} 
+            disabled={loading} 
+          />
+          {isOtherSelected && (
+            <div className="mt-4 animate-fade-up">
+              <FormField label="Manual School Entry" value={formData.customSchool} onChange={v => setFormData({...formData, customSchool: v})} required disabled={loading} placeholder="Enter your school" />
             </div>
           )}
+        </div>
 
-          <div className="md:col-span-2">
-            <label className={labelClasses}>Full Legal Name</label>
-            <input required disabled={loading} type="text" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} className={inputClasses} placeholder="e.g. Kasun Chathuranga Perera" />
-          </div>
+        <FormField label="A/L Year" select options={['2026', '2027', '2028', '2029', '2030']} value={formData.alYear} onChange={v => setFormData({...formData, alYear: v})} disabled={loading} />
+        <FormField label="Medium" select options={Object.values(Medium)} value={formData.medium} onChange={v => setFormData({...formData, medium: v as Medium})} disabled={loading} />
 
-          <div>
-            <label className={labelClasses}>Preferred Name</label>
-            <input required disabled={loading} type="text" value={formData.preferredName} onChange={e => setFormData({...formData, preferredName: e.target.value})} className={inputClasses} placeholder="e.g. Kasun" />
-          </div>
+        <div className="md:col-span-2">
+          <FormField label="Academic Stream" select options={Object.values(SubjectStream)} value={formData.subjectStream} onChange={v => setFormData({...formData, subjectStream: v as SubjectStream})} disabled={loading} />
+        </div>
 
-          <div>
-            <label className={labelClasses}>WhatsApp Number</label>
-            <input required disabled={loading} type="tel" value={formData.whatsappNo} onChange={e => setFormData({...formData, whatsappNo: e.target.value})} className={inputClasses} placeholder="07x xxxxxxx" />
-          </div>
+        <FormField label="Email Address" type="email" value={formData.email} onChange={v => setFormData({...formData, email: v})} required disabled={loading} placeholder="email@example.com" />
+        <FormField label="Password" type="password" value={formData.password} onChange={v => setFormData({...formData, password: v})} required disabled={loading} placeholder="••••••••" />
 
-          <div className="md:col-span-2 space-y-4">
-            <div>
-              <label className={labelClasses}>Select Your School</label>
-              <select 
-                required 
-                disabled={loading}
-                value={formData.school} 
-                onChange={e => setFormData({...formData, school: e.target.value})} 
-                className={inputClasses}
-              >
-                {SRI_LANKAN_SCHOOLS.map(school => (
-                  <option key={school} value={school} disabled={school.startsWith('--')}>{school}</option>
-                ))}
-              </select>
-            </div>
-            
-            {isOtherSelected && (
-              <div className="animate-fade-up">
-                <label className={labelClasses}>Type your school name</label>
-                <input 
-                  required 
-                  disabled={loading}
-                  type="text" 
-                  value={formData.customSchool} 
-                  onChange={e => setFormData({...formData, customSchool: e.target.value})} 
-                  className={inputClasses} 
-                  placeholder="Enter your school name manually" 
-                  autoFocus
-                />
-              </div>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelClasses}>A/L Year</label>
-              <select disabled={loading} value={formData.alYear} onChange={e => setFormData({...formData, alYear: e.target.value})} className={inputClasses}>
-                <option>2026</option>
-                <option>2027</option>
-                <option>2028</option>
-                <option>2029</option>
-                <option>2030</option>
-              </select>
-            </div>
-            <div>
-              <label className={labelClasses}>Medium</label>
-              <select disabled={loading} value={formData.medium} onChange={e => setFormData({...formData, medium: e.target.value as Medium})} className={inputClasses}>
-                {Object.values(Medium).map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div className="md:col-span-2">
-            <label className={labelClasses}>Academic Stream</label>
-            <select disabled={loading} value={formData.subjectStream} onChange={e => setFormData({...formData, subjectStream: e.target.value as SubjectStream})} className={inputClasses}>
-              {Object.values(SubjectStream).map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label className={labelClasses}>Email Address</label>
-            <input required disabled={loading} type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className={inputClasses} placeholder="email@example.com" />
-          </div>
-
-          <div>
-            <label className={labelClasses}>Password</label>
-            <input required disabled={loading} type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className={inputClasses} placeholder="••••••••" />
-          </div>
-
-          <div className="md:col-span-2 pt-6">
-            <button 
-              type="submit" 
-              disabled={loading}
-              className="w-full bg-indigo-600 text-white py-5 rounded-[1.75rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-70"
-            >
-              {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : 'Complete Registration'}
-            </button>
-            <p className="text-center text-slate-400 font-bold mt-6 text-sm">
-              Already a member? <button type="button" onClick={onLogin} className="text-indigo-600 hover:text-indigo-800 transition-colors">Sign In Here</button>
-            </p>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="md:col-span-2 pt-6">
+          <AuthButton loading={loading} text="Create Account" />
+          <p className="text-center text-slate-400 font-bold mt-6 text-xs">
+            Already registered? <button type="button" onClick={onLogin} className="text-indigo-600 hover:text-indigo-800 transition-colors font-black">Sign In Here</button>
+          </p>
+        </div>
+      </form>
+    </AuthLayout>
   );
 };
 

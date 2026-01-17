@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { User, PlanType, Medium, SubjectStream } from './types.ts';
 import LandingPage from './views/LandingPage.tsx';
@@ -125,7 +126,7 @@ const App: React.FC = () => {
     });
 
     if (error) return { error: error.message };
-    setCurrentPage('login');
+    // We stay on the register page for success so we can show verification UI
     return { error: null };
   };
 

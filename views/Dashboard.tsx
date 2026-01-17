@@ -1,7 +1,16 @@
+
 import React, { useState, useEffect } from 'react';
 import { Medium, PlanType } from '../types.ts';
 import { SUBJECTS_BY_STREAM } from '../constants.ts';
 import { useAuth } from '../App.tsx';
+import WhatsAppWidget from '../components/WhatsAppWidget.tsx';
+
+const GraduationCapIcon = ({ className = "w-6 h-6" }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path d="M12 3L1 9l11 6l9-4.91V17h2V9L12 3z"/>
+    <path d="M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z"/>
+  </svg>
+);
 
 interface DashboardProps {
   startExam: (subject: string, topic?: string, type?: 'quick' | 'topic' | 'past' | 'model', timed?: boolean) => void;
@@ -91,7 +100,9 @@ const Dashboard: React.FC<DashboardProps> = ({ startExam, onAdminClick }) => {
     <div className="min-h-screen pb-32 selection:bg-indigo-100">
       <nav className="bg-white/80 backdrop-blur-xl border-b border-slate-100 px-10 py-5 flex justify-between items-center sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-indigo-600 rounded-xl text-white flex items-center justify-center font-bold shadow-lg shadow-indigo-100">L</div>
+          <div className="w-9 h-9 bg-indigo-600 rounded-xl text-white flex items-center justify-center shadow-lg shadow-indigo-100">
+            <GraduationCapIcon className="w-5 h-5" />
+          </div>
           <span className="font-black text-xl tracking-tight text-slate-900">Lumina</span>
         </div>
         <div className="flex items-center gap-8">
@@ -115,10 +126,10 @@ const Dashboard: React.FC<DashboardProps> = ({ startExam, onAdminClick }) => {
           <div className="bg-[#0a0c10] p-12 rounded-[3.5rem] text-white shadow-2xl lg:col-span-2 relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-600/10 rounded-full blur-[100px] -mr-40 -mt-40 transition-transform duration-1000 group-hover:scale-110"></div>
             <div className="relative z-10">
-              <h2 className="text-5xl font-black mb-4 tracking-tight">Ayubowan, {user.preferredName}.</h2>
-              <p className="text-slate-400 mb-12 max-w-lg text-lg font-medium leading-relaxed opacity-90">Prepare for the {user.subjectStream} stream with AI-generated questions from the official MOE syllabus.</p>
+              <h2 className="text-5xl font-black mb-4 tracking-tight animate-fade-up">Ayubowan, {user.preferredName}.</h2>
+              <p className="text-slate-400 mb-12 max-w-lg text-lg font-medium leading-relaxed opacity-90 animate-fade-up delay-100">Prepare for the {user.subjectStream} stream with AI-generated questions from the official MOE syllabus.</p>
               
-              <div className="bg-white/5 p-8 rounded-[2.5rem] backdrop-blur-md border border-white/5">
+              <div className="bg-white/5 p-8 rounded-[2.5rem] backdrop-blur-md border border-white/5 animate-fade-up delay-200">
                 <div className="flex flex-wrap items-center justify-between gap-6 mb-6">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400 mb-2">Current Month Progress</p>
@@ -135,7 +146,7 @@ const Dashboard: React.FC<DashboardProps> = ({ startExam, onAdminClick }) => {
             </div>
           </div>
 
-          <div className="bg-white p-12 rounded-[3.5rem] border border-slate-100 shadow-xl flex flex-col justify-between group">
+          <div className="bg-white p-12 rounded-[3.5rem] border border-slate-100 shadow-xl flex flex-col justify-between group animate-fade-up delay-300">
             <div>
               <div className="flex justify-between items-center mb-8">
                 <h3 className="font-black text-slate-900 uppercase text-xs tracking-[0.2em]">Study Language</h3>
@@ -169,8 +180,8 @@ const Dashboard: React.FC<DashboardProps> = ({ startExam, onAdminClick }) => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-          {subjects.map((sub) => (
-            <div key={sub} className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group/card">
+          {subjects.map((sub, index) => (
+            <div key={sub} className={`bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group/card animate-fade-up`} style={{ animationDelay: `${400 + (index * 100)}ms` }}>
               <div className="flex justify-between items-center mb-8">
                 <h4 className="text-2xl font-black text-slate-900 tracking-tight">{sub}</h4>
                 <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover/card:bg-indigo-600 group-hover/card:text-white transition-all">
@@ -222,6 +233,9 @@ const Dashboard: React.FC<DashboardProps> = ({ startExam, onAdminClick }) => {
           </div>
         </div>
       )}
+
+      {/* WhatsApp Chat Widget */}
+      <WhatsAppWidget message={`Hello Lumina Support, I'm ${user.preferredName} and I need help with my ${user.subjectStream} studies.`} />
     </div>
   );
 };

@@ -9,7 +9,7 @@ export const generateQuestions = async (
   type: 'quick' | 'topic' | 'past' | 'model' = 'quick'
 ): Promise<MCQQuestion[]> => {
   const model = "gemini-3-pro-preview";
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   let specialization = "";
   if (type === 'past') {
@@ -61,5 +61,45 @@ export const generateQuestions = async (
   } catch (error) {
     console.error("Error generating questions:", error);
     return [];
+  }
+};
+
+export const generateSimplerExplanation = async (
+  subject: string,
+  question: string,
+  originalExplanation: string,
+  medium: Medium
+): Promise<string> => {
+  const model = "gemini-3-flash-preview";
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+  const systemInstruction = `You are a legendary A/L tutor in Sri Lanka known for breaking down complex concepts into simple, unforgettable analogies.
+  A student is struggling with a highly technical explanation for a ${subject} MCQ.
+  
+  Your Goal:
+  1. Translate the jargon into simple, everyday language.
+  2. Use a relatable analogy (e.g., comparing electricity to water flow, or cell components to a factory).
+  3. Ensure the core logic remains 100% accurate to the Sri Lankan Ministry of Education syllabus.
+  4. Language MUST be ${medium}.`;
+
+  const prompt = `Student Question: ${question}
+  Standard Technical Explanation: ${originalExplanation}
+  
+  Please provide a simplified, "common sense" version of why the correct answer is right. Use ${medium}.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        systemInstruction,
+        temperature: 0.8,
+      }
+    });
+
+    return response.text.trim();
+  } catch (error) {
+    console.error("Error generating simplified explanation:", error);
+    return "I'm having a bit of trouble simplifying this right now. Please try again in a moment.";
   }
 };

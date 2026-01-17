@@ -1,5 +1,8 @@
+
 import React, { useState } from 'react';
 import { useAuth } from '../App.tsx';
+import { AuthLayout, FormField, AuthButton } from '../components/AuthUI.tsx';
+import { supabase } from '../supabaseClient.ts';
 
 interface LoginPageProps {
   onRegister: () => void;
@@ -11,80 +14,106 @@ const LoginPage: React.FC<LoginPageProps> = ({ onRegister }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendStatus, setResendStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+  const isVerificationError = error.toLowerCase().includes('confirmed') || error.toLowerCase().includes('verify');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setResendStatus('idle');
     
     const { error: loginError } = await login(email, password);
     if (loginError) {
-      setError(loginError);
+      if (loginError.toLowerCase().includes('confirmed') || loginError.toLowerCase().includes('verify')) {
+        setError('Your email is not verified. Please check your inbox for the activation link.');
+      } else {
+        setError(loginError);
+      }
       setLoading(false);
     }
   };
 
+  const handleResend = async () => {
+    if (!email) return;
+    setResending(true);
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email: email,
+      });
+      if (resendError) throw resendError;
+      setResendStatus('success');
+      setError('');
+    } catch (err) {
+      setResendStatus('error');
+    } finally {
+      setResending(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 selection:bg-indigo-100">
-      <div className="bg-white rounded-[2.5rem] shadow-[0_40px_80px_-20px_rgba(0,0,0,0.08)] w-full max-md overflow-hidden border border-slate-100">
-        <div className="p-10 bg-indigo-600 text-white text-center relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-indigo-500 to-indigo-700 opacity-50"></div>
-          <div className="relative z-10">
-            <h2 className="text-3xl font-black tracking-tight mb-2">Welcome Back</h2>
-            <p className="text-indigo-100 font-medium">Continue your journey to mastery.</p>
-          </div>
-        </div>
-        
-        <form onSubmit={handleSubmit} className="p-10 space-y-7">
-          {error && (
-            <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-xs font-bold flex items-center gap-3">
+    <AuthLayout title="Welcome Back" subtitle="Continue your journey to A/L mastery.">
+      <form onSubmit={handleSubmit} className="px-10 pb-12 space-y-6">
+        {error && (
+          <div className={`p-5 rounded-2xl text-[11px] font-black uppercase tracking-wider flex flex-col gap-3 animate-shake ${isVerificationError ? 'bg-amber-50 border border-amber-100 text-amber-700' : 'bg-red-50 border border-red-100 text-red-600'}`}>
+            <div className="flex items-center gap-3">
               <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>
-              {error}
+              <span className="leading-tight">{error}</span>
             </div>
-          )}
-          
-          <div className="space-y-2.5">
-            <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Email Address</label>
-            <input 
-              required 
-              type="email" 
-              value={email} 
-              onChange={e => setEmail(e.target.value)} 
-              className="w-full px-5 py-4 rounded-2xl border-2 border-slate-50 bg-slate-50 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 focus:bg-white transition-all font-bold text-slate-800" 
-              placeholder="e.g. kasun@student.lk" 
-              disabled={loading}
-            />
+            {isVerificationError && (
+              <button 
+                type="button" 
+                onClick={handleResend}
+                disabled={resending}
+                className="mt-1 text-left text-amber-800 underline decoration-amber-300 hover:text-amber-900 transition-colors font-black"
+              >
+                {resending ? 'RESENDING...' : 'RESEND VERIFICATION LINK'}
+              </button>
+            )}
           </div>
+        )}
 
-          <div className="space-y-2.5">
-            <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Password</label>
-            <input 
-              required 
-              type="password" 
-              value={password} 
-              onChange={e => setPassword(e.target.value)} 
-              className="w-full px-5 py-4 rounded-2xl border-2 border-slate-50 bg-slate-50 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 focus:bg-white transition-all font-bold text-slate-800" 
-              placeholder="••••••••" 
-              disabled={loading}
-            />
+        {resendStatus === 'success' && (
+          <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-[11px] font-black uppercase tracking-wider flex items-center gap-3 animate-fade-up">
+            <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+            <span>Verification email resent. Please check your inbox.</span>
           </div>
+        )}
+        
+        <FormField 
+          label="Email Address" 
+          type="email" 
+          value={email} 
+          onChange={setEmail} 
+          placeholder="name@example.com" 
+          required 
+          disabled={loading} 
+        />
 
-          <button 
-            type="submit" 
-            disabled={loading}
-            className="w-full bg-indigo-600 text-white py-4.5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-70"
-          >
-            {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : 'Log In'}
-          </button>
+        <FormField 
+          label="Password" 
+          type="password" 
+          value={password} 
+          onChange={setPassword} 
+          placeholder="••••••••" 
+          required 
+          disabled={loading} 
+        />
 
-          <div className="pt-4 text-center">
-            <p className="text-sm font-bold text-slate-400">
-              Don't have an account? <button type="button" onClick={onRegister} className="text-indigo-600 hover:text-indigo-800 transition-colors">Join Lumina</button>
-            </p>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="pt-4">
+          <AuthButton loading={loading} text="Sign In" />
+        </div>
+
+        <div className="text-center pt-2">
+          <p className="text-xs font-bold text-slate-400">
+            Don't have an account? <button type="button" onClick={onRegister} className="text-indigo-600 hover:text-indigo-800 transition-colors font-black">Join Lumina</button>
+          </p>
+        </div>
+      </form>
+    </AuthLayout>
   );
 };
 
