@@ -7,22 +7,18 @@ import { Medium, MCQQuestion } from "../types.ts";
  */
 const extractJsonArray = (text: string): any[] => {
   try {
-    // 1. Direct try
     const cleanText = text.trim();
-    if (cleanText.startsWith('[') && cleanText.endsWith(']')) {
-      return JSON.parse(cleanText);
-    }
-
-    // 2. Look for the first [ and last ]
-    const startIdx = text.indexOf('[');
-    const endIdx = text.lastIndexOf(']');
+    // Try to find the first array [
+    const startIdx = cleanText.indexOf('[');
+    const endIdx = cleanText.lastIndexOf(']');
     
     if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-      const jsonStr = text.substring(startIdx, endIdx + 1);
+      const jsonStr = cleanText.substring(startIdx, endIdx + 1);
       return JSON.parse(jsonStr);
     }
     
-    throw new Error("Could not locate JSON array boundaries");
+    // Fallback: try direct parse
+    return JSON.parse(cleanText);
   } catch (e) {
     console.error("JSON Extraction Error:", e, "Raw Text:", text);
     return [];
@@ -36,37 +32,41 @@ export const generateQuestions = async (
   topic: string = "general",
   type: 'quick' | 'topic' | 'past' | 'model' = 'quick'
 ): Promise<MCQQuestion[]> => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || apiKey.trim() === '') {
+    throw new Error("System configuration error: API Key is missing. Please ensure your environment is correctly configured.");
+  }
+
   const modelName = "gemini-3-flash-preview";
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey });
   
-  // Sanitize inputs
-  const safeSubject = subject || "General Science";
+  const safeSubject = subject || "General";
   const safeTopic = topic || "General Syllabus";
 
   let styleGuide = "";
   if (type === 'past') {
-    styleGuide = "Mimic the exact structure and difficulty of Sri Lankan A/L National Past Papers from the last 10 years.";
+    styleGuide = "Structure: Mimic Sri Lankan A/L National Past Papers. High technical accuracy required.";
   } else if (type === 'model') {
-    styleGuide = "Create high-difficulty model questions that test complex application of theories according to the SL A/L syllabus.";
+    styleGuide = "Structure: Challenging Model Exam. Focus on multi-step reasoning and application.";
   } else if (type === 'topic') {
-    styleGuide = `Strictly focus only on the unit: ${safeTopic}.`;
+    styleGuide = `Strictly focus only on: ${safeTopic}.`;
   }
 
-  const systemInstruction = `You are a Senior Sri Lankan A/L Examiner specializing in ${safeSubject}.
+  const systemInstruction = `You are a Senior Sri Lankan A/L Examiner for ${safeSubject}.
 Language: ${medium}
-Syllabus: Ministry of Education Sri Lanka.
+Syllabus: Ministry of Education Sri Lanka Official Teacher Guides.
 
-Task: Generate ${count} MCQs.
-Each question must have:
-- Exactly 5 options (SL A/L standard).
-- A valid correctAnswerIndex (0 to 4).
-- A concise explanation of the logic.
+Task: Generate ${count} MCQ questions.
+Rules:
+- Exactly 5 options per question.
+- 1 correct answer index (0-4).
+- Clear, syllabus-accurate explanation.
 
 ${styleGuide}
 
-CRITICAL: Return ONLY a raw JSON array. Do not use markdown backticks like \`\`\`json. Ensure all technical terms are standard for the ${medium} medium in Sri Lanka.`;
+CRITICAL: Return ONLY a raw JSON array. Technical terms must be standard for the ${medium} medium in the SL A/L curriculum.`;
 
-  const prompt = `Generate ${count} MCQ questions for A/L ${safeSubject} in ${medium}. Topic: ${safeTopic}.`;
+  const prompt = `Generate ${count} MCQ questions for A/L ${safeSubject} in ${medium}. Topic: ${safeTopic}. Plan: ${type}.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -75,7 +75,7 @@ CRITICAL: Return ONLY a raw JSON array. Do not use markdown backticks like \`\`\
       config: {
         systemInstruction,
         responseMimeType: "application/json",
-        temperature: 0.4, // More deterministic for structured data
+        temperature: 0.3,
         maxOutputTokens: 4000,
         responseSchema: {
           type: Type.ARRAY,
@@ -98,21 +98,29 @@ CRITICAL: Return ONLY a raw JSON array. Do not use markdown backticks like \`\`\
       }
     });
 
+    // Check if candidates exist (safety filter might have blocked all content)
+    if (!response.candidates || response.candidates.length === 0 || !response.candidates[0].content) {
+      throw new Error("Content generation was blocked by safety filters. Please try a different topic.");
+    }
+
     const text = response.text;
     if (!text) return [];
 
     const questions = extractJsonArray(text);
     
-    // Final validation of structure
+    // Final filtering to ensure valid data
     return questions.filter(q => 
       q.question && 
       Array.isArray(q.options) && 
       q.options.length === 5 && 
-      typeof q.correctAnswerIndex === 'number'
+      typeof q.correctAnswerIndex === 'number' &&
+      q.correctAnswerIndex >= 0 &&
+      q.correctAnswerIndex < 5
     );
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    return [];
+  } catch (error: any) {
+    console.error("Gemini Generation Exception:", error);
+    // Rethrow to let the UI catch block handle specific error messages
+    throw error;
   }
 };
 
@@ -122,23 +130,23 @@ export const generateSimplerExplanation = async (
   originalExplanation: string,
   medium: Medium
 ): Promise<string> => {
-  const modelName = "gemini-3-flash-preview";
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) return "Configuration error: API Key missing.";
 
-  const systemInstruction = `You are a friendly Sri Lankan A/L tutor. Explain the following ${subject} concept to a student using simple analogies in ${medium}.`;
+  const modelName = "gemini-3-flash-preview";
+  const ai = new GoogleGenAI({ apiKey });
+
+  const systemInstruction = `You are a tutor in Sri Lanka. Simplify this technical A/L ${subject} explanation using a relatable analogy. Language: ${medium}.`;
 
   try {
     const response = await ai.models.generateContent({
       model: modelName,
-      contents: `Question: ${question}\nOriginal Explanation: ${originalExplanation}`,
-      config: {
-        systemInstruction,
-        temperature: 0.7,
-      }
+      contents: `Q: ${question}\nExplanation: ${originalExplanation}`,
+      config: { systemInstruction, temperature: 0.8 }
     });
 
-    return response.text || "Sorry, I couldn't simplify this right now.";
+    return response.text || "Couldn't simplify at this moment.";
   } catch (error) {
-    return "The tutor engine is busy. Please try again later.";
+    return "The simplified tutor engine is currently offline.";
   }
 };

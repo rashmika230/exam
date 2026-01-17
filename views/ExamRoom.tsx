@@ -12,6 +12,13 @@ interface ExamRoomProps {
   onFinish: () => void;
 }
 
+const typeLabels: Record<string, string> = {
+  quick: 'Quick Revision',
+  topic: 'Unit Focus',
+  past: 'Past Paper',
+  model: 'Model Exam'
+};
+
 const SimplifiedExplanationBox: React.FC<{
   subject: string;
   question: string;
@@ -102,7 +109,6 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
     setCurrentIdx(0);
     setAnswers([]);
     
-    // Dynamic question count for stability
     let count = 5; 
     if (type === 'past' || type === 'model') count = 10; 
     if (user.plan === PlanType.FREE) {
@@ -124,10 +130,11 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
           setTimeLeft(q.length * 72); 
         }
       } else {
-        setError("Lumina failed to generate valid curriculum questions. This usually happens due to temporary server load or safety filtering.");
+        setError("Lumina failed to generate valid curriculum questions. Please try a different topic or verify your connection.");
       }
-    } catch (e) {
-      setError("A connection error occurred. Please verify your internet and try again.");
+    } catch (e: any) {
+      console.error("Fetch Failure:", e);
+      setError(e.message || "A connection error occurred. Please verify your internet and try again.");
     } finally {
       setLoading(false);
     }
@@ -225,7 +232,9 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
         </div>
         <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-4">Exam Retrieval Failed</h2>
-        <p className="text-slate-500 max-w-sm mb-10 font-medium">{error || "The AI system failed to compile the requested questions. Please try again with a different unit."}</p>
+        <div className="bg-white border border-red-100 p-6 rounded-3xl mb-10 max-w-md w-full shadow-sm">
+           <p className="text-red-500 font-bold text-sm leading-relaxed">{error || "The AI system failed to compile the requested questions."}</p>
+        </div>
         <div className="flex flex-col sm:flex-row gap-4">
           <button onClick={fetchQuestions} className="px-10 py-4 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl">Retry Generation</button>
           <button onClick={onFinish} className="px-10 py-4 bg-white border border-slate-200 text-slate-500 rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all">Return to Dashboard</button>
@@ -298,8 +307,9 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253" /></svg>
           </div>
-          <div className="hidden sm:block">
+          <div>
             <h2 className="text-xl font-black text-slate-900 tracking-tight leading-none">{subject}</h2>
+            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-1.5">{typeLabels[type]}</p>
             <div className="flex items-center gap-2 mt-2">
               <div className="w-32 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                 <div className="h-full bg-indigo-600 transition-all duration-500" style={{ width: `${progress}%` }}></div>
