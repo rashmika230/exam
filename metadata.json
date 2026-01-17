@@ -1,6 +1,6 @@
 {
   "name": "Lumina Exam - A/L Exam Mastery",
-  "description": "A comprehensive examination platform for Sri Lankan A/L students featuring AI-generated MCQs, multi-language support (Sinhala, Tamil, English), and tiered subscription plans.",
+  "description": "Sri Lanka's premier AI-powered examination platform for Advanced Level students.",
   "requestFramePermissions": [
     "camera",
     "microphone"
