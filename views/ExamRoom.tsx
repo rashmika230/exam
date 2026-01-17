@@ -61,7 +61,6 @@ const SimplifiedExplanationBox: React.FC<{
           {loading ? 'Consulting Tutor Engine...' : 'Too complex? Request simpler explanation'}
         </span>
         
-        {/* Animated Glow on Hover */}
         <div className="absolute inset-0 bg-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
       </button>
     </div>
@@ -73,6 +72,7 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
   const [questions, setQuestions] = useState<MCQQuestion[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [answers, setAnswers] = useState<number[]>([]);
   const [viewState, setViewState] = useState<'testing' | 'summary' | 'review'>('testing');
   const [score, setScore] = useState(0);
@@ -90,29 +90,36 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
     questionsRef.current = questions;
   }, [answers, viewState, questions]);
 
-  useEffect(() => {
-    const fetchQuestions = async () => {
-      if (!user) return;
-      
-      let count = 10;
-      if (type === 'past' || type === 'model') count = 50;
-      if (user.plan === PlanType.FREE) count = Math.min(count, 20 - user.questionsAnsweredThisMonth);
+  const fetchQuestions = async () => {
+    if (!user) return;
+    setLoading(true);
+    setError(null);
+    
+    let count = 10;
+    if (type === 'past' || type === 'model') count = 25; // Adjusted down from 50 for faster generation
+    if (user.plan === PlanType.FREE) count = Math.min(count, 20 - user.questionsAnsweredThisMonth);
 
-      try {
-        const q = await generateQuestions(subject, user.medium, count, topic || "general", type);
+    try {
+      const q = await generateQuestions(subject, user.medium, count, topic || "general", type);
+      if (q && q.length > 0) {
         setQuestions(q);
-        
         if (isTimed) {
           setTimeLeft(q.length * 72); 
         }
-      } catch (e) {
-        console.error("Failed to load questions", e);
-      } finally {
-        setLoading(false);
+      } else {
+        setError("Unable to generate questions for this topic. Please try a different unit or check your connection.");
       }
-    };
+    } catch (e) {
+      console.error("Failed to load questions", e);
+      setError("A system error occurred. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchQuestions();
-  }, [subject, user, topic, type, isTimed]);
+  }, [subject, user?.id]);
 
   useEffect(() => {
     if (isTimed && !loading && viewState === 'testing' && timeLeft > 0) {
@@ -131,7 +138,7 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [loading, viewState === 'testing', isTimed]);
+  }, [loading, viewState, isTimed]);
 
   const handleAnswer = (choiceIdx: number) => {
     if (viewState !== 'testing') return;
@@ -167,7 +174,7 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
       const updatedUser = {
         ...user,
         questionsAnsweredThisMonth: user.questionsAnsweredThisMonth + currentQuestions.length,
-        papersAnsweredThisMonth: user.papersAnsweredThisMonth + (currentQuestions.length >= 40 ? 1 : 0)
+        papersAnsweredThisMonth: user.papersAnsweredThisMonth + (currentQuestions.length >= 25 ? 1 : 0)
       };
       await updateUser(updatedUser);
     }
@@ -184,8 +191,24 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-slate-50">
         <div className="w-16 h-16 border-[5px] border-indigo-100 border-t-indigo-600 rounded-full animate-spin mb-8"></div>
-        <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Compiling Syllabus Content...</h2>
+        <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-2 animate-pulse">Compiling Syllabus Content...</h2>
         <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">National Curriculum Engine Active</p>
+      </div>
+    );
+  }
+
+  if (error || questions.length === 0) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-slate-50">
+        <div className="w-20 h-20 bg-red-50 text-red-500 rounded-[2rem] flex items-center justify-center mb-8">
+           <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+        </div>
+        <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-4">{error || "No Questions Found"}</h2>
+        <p className="text-slate-500 max-w-sm mb-10 font-medium">Lumina was unable to retrieve questions for this specific request. This can happen due to safety filters or specific curriculum complexities.</p>
+        <div className="flex gap-4">
+          <button onClick={fetchQuestions} className="px-10 py-4 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl">Retry Generation</button>
+          <button onClick={onFinish} className="px-10 py-4 bg-white border border-slate-200 text-slate-500 rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all">Go Back</button>
+        </div>
       </div>
     );
   }
@@ -201,15 +224,12 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
 
     return (
       <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50 relative overflow-hidden">
-        <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-100 rounded-full blur-[100px] opacity-40"></div>
-        <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-violet-100 rounded-full blur-[100px] opacity-40"></div>
-
         <div className="bg-white rounded-[4rem] shadow-[0_32px_80px_-24px_rgba(0,0,0,0.1)] p-12 md:p-16 max-w-2xl w-full text-center border border-white relative z-10 animate-fade-up">
           <div className={`inline-flex items-center justify-center w-24 h-24 rounded-[2rem] text-white mb-10 shadow-2xl ${isTimeout ? 'bg-amber-500 shadow-amber-200' : 'bg-indigo-600 shadow-indigo-200'}`}>
             {isTimeout ? (
               <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             ) : (
-              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>
+              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138z" /></svg>
             )}
           </div>
           
@@ -262,13 +282,7 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
             <h2 className="text-xl font-black text-slate-900">{subject}</h2>
             <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Performance Review</p>
           </div>
-          <div className="flex items-center gap-6">
-            <div className="hidden sm:flex items-baseline gap-2">
-              <span className="text-lg font-black text-indigo-600">{score}/{questions.length}</span>
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Correct</span>
-            </div>
-            <button onClick={onFinish} className="bg-slate-950 text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 transition-all">Exit Review</button>
-          </div>
+          <button onClick={onFinish} className="bg-slate-950 text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 transition-all">Exit Review</button>
         </header>
 
         <div className="max-w-3xl w-full p-6 pb-32 space-y-8 animate-fade-up">
@@ -279,52 +293,28 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
                   <span className="inline-block px-3 py-1 rounded-lg bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Question {i+1}</span>
                   <p className="font-bold text-slate-800 leading-relaxed text-xl">{q.question}</p>
                 </div>
-                <div className={`shrink-0 p-3 rounded-2xl ${answers[i] === q.correctAnswerIndex ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                   {answers[i] === q.correctAnswerIndex ? (
-                     <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-                   ) : (
-                     <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
-                   )}
-                </div>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="p-5 rounded-3xl border-2 border-emerald-100/50 bg-emerald-50/10">
-                  <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-2">
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
-                    Correct Option
-                  </p>
+                  <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-2">Correct Option</p>
                   <p className="text-sm font-bold text-slate-700">{q.options[q.correctAnswerIndex]}</p>
                 </div>
                 {answers[i] !== q.correctAnswerIndex && (
                   <div className="p-5 rounded-3xl border-2 border-red-100/50 bg-red-50/10">
-                    <p className="text-[9px] font-black text-red-600 uppercase tracking-widest mb-2 flex items-center gap-2">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg>
-                      Your Answer
-                    </p>
+                    <p className="text-[9px] font-black text-red-600 uppercase tracking-widest mb-2 flex items-center gap-2">Your Answer</p>
                     <p className="text-sm font-bold text-slate-700">{q.options[answers[i]] || "Skipped"}</p>
                   </div>
                 )}
               </div>
 
               <div className="pt-8 mt-4 border-t border-slate-100">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
-                  Curriculum Explanation
-                </p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">Curriculum Explanation</p>
                 <p className="text-sm font-medium text-slate-600 leading-relaxed">{q.explanation}</p>
-                
-                {/* Simplified Explanation Request Feature */}
-                <SimplifiedExplanationBox 
-                  subject={subject} 
-                  question={q.question} 
-                  originalExplanation={q.explanation} 
-                  medium={user?.medium} 
-                />
+                <SimplifiedExplanationBox subject={subject} question={q.question} originalExplanation={q.explanation} medium={user?.medium} />
               </div>
             </div>
           ))}
-
           <div className="py-20 text-center">
             <button onClick={onFinish} className="bg-slate-900 text-white px-16 py-6 rounded-[2.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-indigo-600 shadow-2xl transition-all">Exit Performance Review</button>
           </div>
@@ -333,21 +323,18 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
     );
   }
 
-  // 3. TESTING VIEW
   const q = questions[currentIdx];
   const progress = ((currentIdx + 1) / questions.length) * 100;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center">
-      {/* Premium Sticky Header */}
-      <header className="sticky top-0 w-full z-[60] bg-white/90 backdrop-blur-2xl border-b border-slate-100 py-6 px-10 shadow-sm transition-all duration-300">
+      <header className="sticky top-0 w-full z-[60] bg-white/90 backdrop-blur-2xl border-b border-slate-100 py-6 px-10 shadow-sm">
         <div className="max-w-5xl mx-auto flex justify-between items-center gap-6">
           <div className="flex items-center gap-6">
             <div className="hidden md:block">
               <h2 className="text-xl font-black text-slate-900 tracking-tight">{subject}</h2>
               <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">National Syllabus MCQ Exam</p>
             </div>
-            <div className="h-10 w-[1px] bg-slate-100 hidden md:block"></div>
             <div className="flex flex-col">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Session Progress</span>
               <div className="flex items-center gap-3">
@@ -358,83 +345,36 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
               </div>
             </div>
           </div>
-          
           {isTimed && (
-            <div className={`relative px-8 py-3 rounded-2xl border-2 transition-all duration-500 flex flex-col items-center ${timeLeft < 30 ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' : 'bg-white border-slate-100 text-slate-900 shadow-sm'}`}>
+            <div className={`px-8 py-3 rounded-2xl border-2 flex flex-col items-center ${timeLeft < 30 ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' : 'bg-white border-slate-100 text-slate-900 shadow-sm'}`}>
               <span className="text-[8px] font-black uppercase tracking-[0.3em] mb-0.5">Time Remaining</span>
               <span className="text-2xl font-black tracking-tighter tabular-nums leading-none">{formatTime(timeLeft)}</span>
-              {timeLeft < 10 && <div className="absolute inset-0 bg-red-500/5 rounded-2xl"></div>}
             </div>
           )}
         </div>
       </header>
 
       <main className="max-w-4xl w-full p-6 pt-12 pb-32 flex flex-col flex-1">
-        {/* Question Card */}
         <div className="bg-white rounded-[4rem] shadow-[0_40px_100px_-30px_rgba(0,0,0,0.06)] border border-white p-12 md:p-20 relative animate-fade-up">
-           <div className="absolute top-0 left-12 transform -translate-y-1/2">
-              <div className="bg-slate-950 text-white px-6 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl">
-                 Item {currentIdx + 1}
-              </div>
-           </div>
-           
-           <h3 className="text-2xl md:text-3xl font-bold mb-16 leading-relaxed text-slate-800">
-             {q.question}
-           </h3>
-
+           <h3 className="text-2xl md:text-3xl font-bold mb-16 leading-relaxed text-slate-800">{q?.question}</h3>
            <div className="grid grid-cols-1 gap-4">
-            {q.options.map((opt, i) => (
-              <button 
-                key={i} 
-                onClick={() => handleAnswer(i)} 
-                className={`group w-full flex items-center gap-8 p-6 rounded-[2rem] border-2 transition-all text-left relative overflow-hidden ${answers[currentIdx] === i ? 'border-indigo-600 bg-indigo-50/50 shadow-xl shadow-indigo-100/50' : 'border-slate-50 bg-slate-50 hover:border-slate-200 hover:bg-white'}`}
-              >
-                {/* Option Identifier */}
-                <div className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center font-black text-base border-2 transition-all ${answers[currentIdx] === i ? 'bg-indigo-600 text-white border-indigo-600 scale-110' : 'text-slate-400 border-slate-100 bg-white group-hover:border-indigo-200 group-hover:text-indigo-400'}`}>
+            {q?.options?.map((opt, i) => (
+              <button key={i} onClick={() => handleAnswer(i)} className={`group w-full flex items-center gap-8 p-6 rounded-[2rem] border-2 transition-all text-left relative overflow-hidden ${answers[currentIdx] === i ? 'border-indigo-600 bg-indigo-50/50 shadow-xl' : 'border-slate-50 bg-slate-50 hover:border-slate-200 hover:bg-white'}`}>
+                <div className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center font-black text-base border-2 transition-all ${answers[currentIdx] === i ? 'bg-indigo-600 text-white border-indigo-600' : 'text-slate-400 border-slate-100 bg-white group-hover:border-indigo-200 group-hover:text-indigo-400'}`}>
                   {String.fromCharCode(65 + i)}
                 </div>
-                
-                {/* Option Content */}
-                <span className={`text-lg font-bold transition-colors ${answers[currentIdx] === i ? 'text-indigo-950' : 'text-slate-600 group-hover:text-slate-900'}`}>
-                  {opt}
-                </span>
-
-                {/* Selection Indicator Background */}
-                {answers[currentIdx] === i && (
-                  <div className="absolute top-0 left-0 w-1 h-full bg-indigo-600"></div>
-                )}
+                <span className={`text-lg font-bold transition-colors ${answers[currentIdx] === i ? 'text-indigo-950' : 'text-slate-600 group-hover:text-slate-900'}`}>{opt}</span>
               </button>
             ))}
           </div>
         </div>
-
-        {/* Navigation Floating Actions */}
         <div className="mt-12 flex gap-6 items-center">
-          <button 
-            disabled={currentIdx === 0} 
-            onClick={() => setCurrentIdx(prev => prev - 1)} 
-            className="h-20 px-10 rounded-[2rem] font-black text-xs uppercase tracking-widest text-slate-400 border border-slate-200 hover:bg-white hover:text-slate-900 transition-all disabled:opacity-0 active:scale-95"
-          >
-            Previous
-          </button>
-          <button 
-            disabled={answers[currentIdx] === undefined} 
-            onClick={nextQuestion} 
-            className="h-20 flex-1 bg-slate-950 text-white rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] hover:bg-indigo-600 shadow-2xl hover:shadow-indigo-200 transition-all active:scale-95 disabled:opacity-30 disabled:hover:bg-slate-950 disabled:cursor-not-allowed group flex items-center justify-center gap-4"
-          >
+          <button disabled={currentIdx === 0} onClick={() => setCurrentIdx(prev => prev - 1)} className="h-20 px-10 rounded-[2rem] font-black text-xs uppercase tracking-widest text-slate-400 border border-slate-200 hover:bg-white hover:text-slate-900 disabled:opacity-0">Previous</button>
+          <button disabled={answers[currentIdx] === undefined} onClick={nextQuestion} className="h-20 flex-1 bg-slate-950 text-white rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] hover:bg-indigo-600 shadow-2xl transition-all disabled:opacity-30 flex items-center justify-center gap-4">
             {currentIdx === questions.length - 1 ? 'Complete Examination' : 'Confirm & Next'}
-            <svg className="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
           </button>
         </div>
       </main>
-      
-      {/* Subtle Background Mark */}
-      <div className="fixed bottom-10 right-10 opacity-5 pointer-events-none hidden lg:block">
-        <svg className="w-48 h-48 text-slate-900" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M12 3L1 9l11 6l9-4.91V17h2V9L12 3z"/>
-          <path d="M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z"/>
-        </svg>
-      </div>
     </div>
   );
 };

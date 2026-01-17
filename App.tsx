@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { User, PlanType, Medium, SubjectStream } from './types.ts';
 import LandingPage from './views/LandingPage.tsx';
@@ -38,11 +37,16 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const initAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        await fetchAndMapProfile(session.user.id);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          await fetchAndMapProfile(session.user.id);
+        }
+      } catch (e) {
+        console.error("Auth init error:", e);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     initAuth();
@@ -61,39 +65,45 @@ const App: React.FC = () => {
   }, []);
 
   const fetchAndMapProfile = async (userId: string) => {
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-    if (error) {
+      if (error) throw error;
+
+      if (profile) {
+        const mappedUser: User = {
+          id: profile.id,
+          fullName: profile.full_name,
+          preferredName: profile.preferred_name,
+          whatsappNo: profile.whatsapp_no,
+          school: profile.school,
+          alYear: profile.al_year,
+          plan: profile.plan as PlanType,
+          subjectStream: profile.subject_stream as SubjectStream,
+          email: profile.email,
+          role: profile.role as 'student' | 'admin',
+          medium: profile.medium as Medium,
+          questionsAnsweredThisMonth: profile.questions_answered_this_month,
+          papersAnsweredThisMonth: profile.papers_answered_this_month,
+          lastResetDate: profile.last_reset_date
+        };
+
+        setUser(mappedUser);
+        
+        // Only redirect to dashboard if we are currently on a non-auth page
+        setCurrentPage(prev => {
+          if (['home', 'login', 'register'].includes(prev)) {
+            return mappedUser.role === 'admin' ? 'admin' : 'dashboard';
+          }
+          return prev;
+        });
+      }
+    } catch (error) {
       console.error("Error fetching profile:", error);
-      return;
-    }
-
-    const mappedUser: User = {
-      id: profile.id,
-      fullName: profile.full_name,
-      preferredName: profile.preferred_name,
-      whatsappNo: profile.whatsapp_no,
-      school: profile.school,
-      alYear: profile.al_year,
-      plan: profile.plan as PlanType,
-      subjectStream: profile.subject_stream as SubjectStream,
-      email: profile.email,
-      role: profile.role as 'student' | 'admin',
-      medium: profile.medium as Medium,
-      questionsAnsweredThisMonth: profile.questions_answered_this_month,
-      papersAnsweredThisMonth: profile.papers_answered_this_month,
-      lastResetDate: profile.last_reset_date
-    };
-
-    setUser(mappedUser);
-    
-    const authPages = ['home', 'login', 'register'];
-    if (authPages.includes(currentPage)) {
-      setCurrentPage(mappedUser.role === 'admin' ? 'admin' : 'dashboard');
     }
   };
 
@@ -126,7 +136,6 @@ const App: React.FC = () => {
     });
 
     if (error) return { error: error.message };
-    // We stay on the register page for success so we can show verification UI
     return { error: null };
   };
 
@@ -177,8 +186,9 @@ const App: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-12 h-12 border-4 border-indigo-600/30 border-t-indigo-600 rounded-full animate-spin mb-6"></div>
+        <p className="text-slate-500 font-black text-[10px] uppercase tracking-[0.3em] animate-pulse">Initializing Lumina Engine</p>
       </div>
     );
   }

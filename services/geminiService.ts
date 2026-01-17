@@ -8,7 +8,8 @@ export const generateQuestions = async (
   topic: string = "general",
   type: 'quick' | 'topic' | 'past' | 'model' = 'quick'
 ): Promise<MCQQuestion[]> => {
-  const model = "gemini-3-pro-preview";
+  // Switched to Flash for significantly faster response times (addresses "loading too more time")
+  const model = "gemini-3-flash-preview";
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   let specialization = "";
@@ -25,10 +26,11 @@ export const generateQuestions = async (
   The questions must be strictly based on the Sri Lankan Ministry of Education teacher guides and syllabus.
   Language: ${medium}.
   ${specialization}
-  For each question, provide 5 options (common for SL A/L), the index of the correct answer, and a detailed explanation.
-  Ensure the tone and technical terms are accurate for the ${medium} medium SL A/L curriculum.`;
+  For each question, provide 5 options (common for SL A/L), the index of the correct answer (0-4), and a detailed explanation.
+  Ensure the tone and technical terms are accurate for the ${medium} medium SL A/L curriculum.
+  CRITICAL: Return ONLY a raw JSON array. No markdown, no backticks, no "json" labels.`;
 
-  const prompt = `Generate ${count} MCQ questions for SL A/L ${subject} in ${medium} language. Return only valid JSON.`;
+  const prompt = `Generate ${count} MCQ questions for SL A/L ${subject} in ${medium} language. Topic: ${topic}.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -46,6 +48,8 @@ export const generateQuestions = async (
               options: { 
                 type: Type.ARRAY, 
                 items: { type: Type.STRING },
+                minItems: 5,
+                maxItems: 5
               },
               correctAnswerIndex: { type: Type.INTEGER },
               explanation: { type: Type.STRING }
@@ -56,10 +60,19 @@ export const generateQuestions = async (
       }
     });
 
-    const jsonStr = response.text.trim();
-    return JSON.parse(jsonStr || '[]');
+    const text = response.text;
+    // Remove any accidental markdown formatting if present
+    const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    const questions = JSON.parse(cleanJson);
+    
+    if (!Array.isArray(questions) || questions.length === 0) {
+      throw new Error("Invalid or empty question array returned from AI");
+    }
+
+    return questions;
   } catch (error) {
-    console.error("Error generating questions:", error);
+    console.error("Critical Error in Question Generation:", error);
+    // Return empty array so the UI can handle the error state gracefully
     return [];
   }
 };
