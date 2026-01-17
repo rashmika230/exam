@@ -3,10 +3,11 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
 
-// Surgical environment initialization
+// Surgical environment initialization for browser runtime
 if (typeof window !== 'undefined') {
-  (window as any).process = (window as any).process || {};
-  (window as any).process.env = (window as any).process.env || {};
+  const win = window as any;
+  win.process = win.process || {};
+  win.process.env = win.process.env || {};
 }
 
 const rootElement = document.getElementById('root');

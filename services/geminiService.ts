@@ -29,21 +29,19 @@ export const generateQuestions = async (
   topic: string = "general",
   type: 'quick' | 'topic' | 'past' | 'model' = 'quick'
 ): Promise<MCQQuestion[]> => {
-  // Use the platform-provided API key directly
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const modelName = "gemini-3-flash-preview";
+  // Always use process.env.API_KEY as per platform requirements
+  const apiKey = process.env.API_KEY;
+  
+  if (!apiKey) {
+    throw new Error("Lumina Engine: API Key is missing. If you are seeing this on Netlify, please add the 'API_KEY' environment variable in your Site Settings.");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  // Using gemini-3-pro-preview for high-complexity STEM/Commerce reasoning required for A/Ls
+  const modelName = "gemini-3-pro-preview";
   
   const safeSubject = subject || "General";
   const safeTopic = topic || "General Syllabus";
-
-  let styleGuide = "";
-  if (type === 'past') {
-    styleGuide = "Mimic Sri Lankan A/L National Past Papers structure accurately.";
-  } else if (type === 'model') {
-    styleGuide = "Challenging Model Exam style focusing on syllabus application.";
-  } else if (type === 'topic') {
-    styleGuide = `Focus strictly on the curriculum unit: ${safeTopic}.`;
-  }
 
   const systemInstruction = `You are an expert Sri Lankan A/L Examiner for ${safeSubject}.
 Medium: ${medium}
@@ -97,7 +95,6 @@ Return ONLY a raw JSON array. Technical terms must be standard for the ${medium}
     return questions.filter(q => q.question && Array.isArray(q.options) && q.options.length === 5);
   } catch (error: any) {
     console.error("Lumina Connection Error:", error);
-    // Pass the actual SDK error message back to the UI for better transparency
     throw new Error(error.message || "A secure connection to the Lumina engine could not be established.");
   }
 };
@@ -108,7 +105,10 @@ export const generateSimplerExplanation = async (
   originalExplanation: string,
   medium: Medium
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) return "Simplified tutor service unavailable: API key missing.";
+
+  const ai = new GoogleGenAI({ apiKey });
   const modelName = "gemini-3-flash-preview";
 
   const systemInstruction = `You are a friendly Sri Lankan tutor. Simplify this technical A/L ${subject} concept using an easy-to-understand analogy. Language: ${medium}.`;
