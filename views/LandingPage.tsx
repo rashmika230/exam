@@ -1,7 +1,6 @@
-
 import React from 'react';
-import { PlanType } from '../types';
-import { PRICING_PLANS } from '../constants';
+import { PlanType } from '../types.ts';
+import { PRICING_PLANS } from '../constants.ts';
 
 interface LandingPageProps {
   onNavigateToRegister: (plan: PlanType) => void;

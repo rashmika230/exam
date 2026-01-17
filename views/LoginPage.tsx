@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { useAuth } from '../App';
+import { useAuth } from '../App.tsx';
 
 interface LoginPageProps {
   onRegister: () => void;
@@ -11,17 +10,23 @@ const LoginPage: React.FC<LoginPageProps> = ({ onRegister }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!login(email, password)) {
-      setError('The credentials you entered do not match our records.');
+    setLoading(true);
+    setError('');
+    
+    const { error: loginError } = await login(email, password);
+    if (loginError) {
+      setError(loginError);
+      setLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 selection:bg-indigo-100">
-      <div className="bg-white rounded-[2.5rem] shadow-[0_40px_80px_-20px_rgba(0,0,0,0.08)] w-full max-w-md overflow-hidden border border-slate-100">
+      <div className="bg-white rounded-[2.5rem] shadow-[0_40px_80px_-20px_rgba(0,0,0,0.08)] w-full max-md overflow-hidden border border-slate-100">
         <div className="p-10 bg-indigo-600 text-white text-center relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-indigo-500 to-indigo-700 opacity-50"></div>
           <div className="relative z-10">
@@ -47,6 +52,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onRegister }) => {
               onChange={e => setEmail(e.target.value)} 
               className="w-full px-5 py-4 rounded-2xl border-2 border-slate-50 bg-slate-50 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 focus:bg-white transition-all font-bold text-slate-800" 
               placeholder="e.g. kasun@student.lk" 
+              disabled={loading}
             />
           </div>
 
@@ -59,11 +65,16 @@ const LoginPage: React.FC<LoginPageProps> = ({ onRegister }) => {
               onChange={e => setPassword(e.target.value)} 
               className="w-full px-5 py-4 rounded-2xl border-2 border-slate-50 bg-slate-50 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 focus:bg-white transition-all font-bold text-slate-800" 
               placeholder="••••••••" 
+              disabled={loading}
             />
           </div>
 
-          <button type="submit" className="w-full bg-indigo-600 text-white py-4.5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-[0.98]">
-            Log In
+          <button 
+            type="submit" 
+            disabled={loading}
+            className="w-full bg-indigo-600 text-white py-4.5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-70"
+          >
+            {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : 'Log In'}
           </button>
 
           <div className="pt-4 text-center">

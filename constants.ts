@@ -1,5 +1,4 @@
-
-import { SubjectStream, PlanType } from './types';
+import { SubjectStream, PlanType } from './types.ts';
 
 export const SUBJECTS_BY_STREAM: Record<SubjectStream, string[]> = {
   [SubjectStream.PHYSICAL_SCIENCE]: ['Combined Mathematics', 'Physics', 'Chemistry'],

@@ -1,6 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
-import { User, PlanType, SubjectStream } from '../types';
+import { User, PlanType, SubjectStream, Medium } from '../types.ts';
+import { supabase } from '../supabaseClient.ts';
 
 interface AdminPanelProps {
   onDashboard: () => void;
@@ -10,33 +10,62 @@ type AdminView = 'users' | 'analytics';
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ onDashboard }) => {
   const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
   const [activeView, setActiveView] = useState<AdminView>('users');
 
   useEffect(() => {
-    // Sync with the key used in App.tsx
-    const allUsers = JSON.parse(localStorage.getItem('lumina_all_users') || '[]');
-    setUsers(allUsers);
+    fetchUsers();
   }, []);
 
-  const handleDeleteUser = (id: string) => {
-    if (confirm('Are you sure you want to delete this user?')) {
-      const updated = users.filter(u => u.id !== id);
-      setUsers(updated);
-      localStorage.setItem('lumina_all_users', JSON.stringify(updated));
+  const fetchUsers = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*');
+
+    if (error) {
+      console.error("Error fetching users:", error);
+    } else {
+      const mapped = data.map(p => ({
+        id: p.id,
+        fullName: p.full_name,
+        preferredName: p.preferred_name,
+        whatsappNo: p.whatsapp_no,
+        school: p.school,
+        alYear: p.al_year,
+        plan: p.plan as PlanType,
+        subjectStream: p.subject_stream as SubjectStream,
+        email: p.email,
+        role: p.role as 'student' | 'admin',
+        medium: p.medium as Medium,
+        questionsAnsweredThisMonth: p.questions_answered_this_month,
+        papersAnsweredThisMonth: p.papers_answered_this_month,
+        lastResetDate: p.last_reset_date
+      }));
+      setUsers(mapped);
+    }
+    setLoading(false);
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    if (confirm('Are you sure you want to delete this user? This will remove their auth record and profile.')) {
+      const { error } = await supabase.from('profiles').delete().eq('id', id);
+      if (error) alert(error.message);
+      else fetchUsers();
     }
   };
 
-  const handleToggleRole = (id: string, currentRole: 'student' | 'admin') => {
+  const handleToggleRole = async (id: string, currentRole: 'student' | 'admin') => {
     const newRole = currentRole === 'student' ? 'admin' : 'student';
-    if (confirm(`Are you sure you want to ${newRole === 'admin' ? 'promote to Admin' : 'demote to Student'}?`)) {
-      const updated = users.map(u => u.id === id ? { ...u, role: newRole } : u);
-      setUsers(updated);
-      localStorage.setItem('lumina_all_users', JSON.stringify(updated));
+    if (confirm(`Are you sure you want to change this user to ${newRole}?`)) {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: newRole })
+        .eq('id', id);
       
-      // If the current logged in user updated themselves, we'd need to sync App state, 
-      // but usually an admin demoting themselves would just log them out or refresh.
-      // For simplicity, we just update the storage here.
+      if (error) alert(error.message);
+      else fetchUsers();
     }
   };
 
@@ -54,7 +83,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onDashboard }) => {
     totalPapers: users.reduce((acc, u) => acc + (u.papersAnsweredThisMonth || 0), 0),
   };
 
-  // Analytics Data Aggregation
   const streamDistribution = Object.values(SubjectStream).map(stream => ({
     name: stream,
     count: users.filter(u => u.subjectStream === stream).length
@@ -68,6 +96,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onDashboard }) => {
 
   const maxQuestions = Math.max(...planEngagement.map(p => p.questions), 1);
   const maxStreamCount = Math.max(...streamDistribution.map(s => s.count), 1);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
@@ -222,7 +258,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onDashboard }) => {
           </>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-            {/* Global Metrics */}
             <div className="bg-white p-12 rounded-[3.5rem] shadow-xl border border-slate-100 flex flex-col h-full animate-fade-up">
               <h3 className="text-2xl font-black mb-10 text-slate-900 flex items-center gap-4">
                 <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
@@ -250,7 +285,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onDashboard }) => {
                     </div>
                   ))}
                 </div>
-                
                 <div className="mt-16 grid grid-cols-2 gap-6">
                   <div className="p-8 bg-slate-900 rounded-3xl border border-slate-800 shadow-xl">
                     <p className="text-indigo-400 text-[9px] font-black uppercase tracking-widest mb-2">Platform solved</p>
@@ -263,8 +297,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onDashboard }) => {
                 </div>
               </div>
             </div>
-
-            {/* Stream Distribution */}
             <div className="bg-white p-12 rounded-[3.5rem] shadow-xl border border-slate-100 h-full animate-fade-up delay-100">
               <h3 className="text-2xl font-black mb-10 text-slate-900 flex items-center gap-4">
                 <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600">
@@ -287,17 +319,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onDashboard }) => {
                     </div>
                   </div>
                 ))}
-              </div>
-              
-              <div className="mt-16 bg-gradient-to-br from-slate-900 to-indigo-950 rounded-[2.5rem] p-10 text-white relative overflow-hidden shadow-2xl">
-                <div className="relative z-10">
-                  <h4 className="text-indigo-300 font-black text-[9px] uppercase tracking-[0.3em] mb-3">Vision 2025</h4>
-                  <p className="text-3xl font-black mb-2">Expansion Active</p>
-                  <p className="text-indigo-200/60 text-sm font-medium leading-relaxed">Aggregating {stats.total > 0 ? (stats.total * 1.8).toFixed(0) : 250} candidates for the upcoming A/L season.</p>
-                </div>
-                <div className="absolute -right-12 -bottom-12 opacity-10">
-                  <svg className="w-56 h-56" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V9h2v7zm4 0h-2V7h2v9z"/></svg>
-                </div>
               </div>
             </div>
           </div>

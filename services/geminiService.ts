@@ -1,8 +1,5 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
-import { Medium, MCQQuestion } from "../types";
-
-// Note: Initialization moved inside function to ensure fresh API key usage and correct scoping.
+import { Medium, MCQQuestion } from "../types.ts";
 
 export const generateQuestions = async (
   subject: string,
@@ -11,10 +8,8 @@ export const generateQuestions = async (
   topic: string = "general",
   type: 'quick' | 'topic' | 'past' | 'model' = 'quick'
 ): Promise<MCQQuestion[]> => {
-  // Use gemini-3-pro-preview for complex STEM and Advanced Level curriculum logic
   const model = "gemini-3-pro-preview";
-  // Always initialize with direct process.env.API_KEY
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
   
   let specialization = "";
   if (type === 'past') {

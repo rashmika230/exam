@@ -1,19 +1,20 @@
-
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import { User, PlanType, Medium } from './types';
-import LandingPage from './views/LandingPage';
-import RegisterPage from './views/RegisterPage';
-import LoginPage from './views/LoginPage';
-import Dashboard from './views/Dashboard';
-import ExamRoom from './views/ExamRoom';
-import AdminPanel from './views/AdminPanel';
+import { User, PlanType, Medium, SubjectStream } from './types.ts';
+import LandingPage from './views/LandingPage.tsx';
+import RegisterPage from './views/RegisterPage.tsx';
+import LoginPage from './views/LoginPage.tsx';
+import Dashboard from './views/Dashboard.tsx';
+import ExamRoom from './views/ExamRoom.tsx';
+import AdminPanel from './views/AdminPanel.tsx';
+import { supabase } from './supabaseClient.ts';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, pass: string) => boolean;
-  register: (userData: Partial<User>) => void;
-  logout: () => void;
-  updateUser: (updatedUser: User) => void;
+  loading: boolean;
+  login: (email: string, pass: string) => Promise<{ error: string | null }>;
+  register: (userData: any) => Promise<{ error: string | null }>;
+  logout: () => Promise<void>;
+  updateUser: (updatedUser: User) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -26,6 +27,7 @@ export const useAuth = () => {
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState<'home' | 'login' | 'register' | 'dashboard' | 'exam' | 'admin'>('home');
   const [selectedPlan, setSelectedPlan] = useState<PlanType>(PlanType.FREE);
   const [currentSubject, setCurrentSubject] = useState<string>('');
@@ -33,80 +35,129 @@ const App: React.FC = () => {
   const [currentExamType, setCurrentExamType] = useState<'quick' | 'topic' | 'past' | 'model'>('quick');
   const [isTimed, setIsTimed] = useState<boolean>(false);
 
-  // LocalStorage Mock Persistence
   useEffect(() => {
-    const savedUser = localStorage.getItem('lumina_user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-      setCurrentPage('dashboard');
-    }
+    const initAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await fetchAndMapProfile(session.user.id);
+      }
+      setLoading(false);
+    };
+
+    initAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session) {
+        await fetchAndMapProfile(session.user.id);
+      } else {
+        setUser(null);
+        setCurrentPage('home');
+      }
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const login = (email: string, pass: string) => {
-    const users: User[] = JSON.parse(localStorage.getItem('lumina_all_users') || '[]');
-    const found = users.find(u => u.email === email && u.password === pass);
-    if (found) {
-      setUser(found);
-      localStorage.setItem('lumina_user', JSON.stringify(found));
-      setCurrentPage(found.role === 'admin' ? 'admin' : 'dashboard');
-      return true;
-    }
-    // Hardcoded Admin fallback
-    if (email === 'admin@luminaexam.lk' && pass === 'admin123') {
-      const adminUser: User = {
-        id: 'admin',
-        fullName: 'System Administrator',
-        preferredName: 'Admin',
-        whatsappNo: '000',
-        school: 'Lumina Exam HQ',
-        alYear: '2024',
-        plan: PlanType.PLUS,
-        subjectStream: 'Physical Science' as any,
-        email: 'admin@luminaexam.lk',
-        role: 'admin',
-        medium: Medium.ENGLISH,
-        questionsAnsweredThisMonth: 0,
-        papersAnsweredThisMonth: 0,
-        lastResetDate: new Date().toISOString()
-      };
-      setUser(adminUser);
-      setCurrentPage('admin');
-      return true;
-    }
-    return false;
-  };
+  const fetchAndMapProfile = async (userId: string) => {
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
 
-  const register = (userData: Partial<User>) => {
-    const newUser: User = {
-      ...userData,
-      id: Math.random().toString(36).substr(2, 9),
-      role: 'student',
-      medium: Medium.SINHALA,
-      questionsAnsweredThisMonth: 0,
-      papersAnsweredThisMonth: 0,
-      lastResetDate: new Date().toISOString()
-    } as User;
+    if (error) {
+      console.error("Error fetching profile:", error);
+      return;
+    }
+
+    const mappedUser: User = {
+      id: profile.id,
+      fullName: profile.full_name,
+      preferredName: profile.preferred_name,
+      whatsappNo: profile.whatsapp_no,
+      school: profile.school,
+      alYear: profile.al_year,
+      plan: profile.plan as PlanType,
+      subjectStream: profile.subject_stream as SubjectStream,
+      email: profile.email,
+      role: profile.role as 'student' | 'admin',
+      medium: profile.medium as Medium,
+      questionsAnsweredThisMonth: profile.questions_answered_this_month,
+      papersAnsweredThisMonth: profile.papers_answered_this_month,
+      lastResetDate: profile.last_reset_date
+    };
+
+    setUser(mappedUser);
     
-    const users: User[] = JSON.parse(localStorage.getItem('lumina_all_users') || '[]');
-    users.push(newUser);
-    localStorage.setItem('lumina_all_users', JSON.stringify(users));
-    setCurrentPage('login');
+    const authPages = ['home', 'login', 'register'];
+    if (authPages.includes(currentPage)) {
+      setCurrentPage(mappedUser.role === 'admin' ? 'admin' : 'dashboard');
+    }
   };
 
-  const logout = () => {
+  const login = async (email: string, pass: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password: pass,
+    });
+    if (error) return { error: error.message };
+    return { error: null };
+  };
+
+  const register = async (userData: any) => {
+    const { error } = await supabase.auth.signUp({
+      email: userData.email,
+      password: userData.password,
+      options: {
+        data: {
+          fullName: userData.fullName,
+          preferredName: userData.preferredName,
+          whatsappNo: userData.whatsappNo,
+          school: userData.school,
+          alYear: userData.alYear,
+          plan: userData.plan,
+          subjectStream: userData.subjectStream,
+          medium: userData.medium,
+          role: 'student'
+        }
+      }
+    });
+
+    if (error) return { error: error.message };
+    setCurrentPage('login');
+    return { error: null };
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem('lumina_user');
     setCurrentPage('home');
   };
 
-  const updateUser = (updatedUser: User) => {
+  const updateUser = async (updatedUser: User) => {
     setUser(updatedUser);
-    localStorage.setItem('lumina_user', JSON.stringify(updatedUser));
-    const allUsers: User[] = JSON.parse(localStorage.getItem('lumina_all_users') || '[]');
-    const idx = allUsers.findIndex(u => u.id === updatedUser.id);
-    if (idx > -1) {
-      allUsers[idx] = updatedUser;
-      localStorage.setItem('lumina_all_users', JSON.stringify(allUsers));
+    
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        full_name: updatedUser.fullName,
+        preferred_name: updatedUser.preferredName,
+        whatsapp_no: updatedUser.whatsappNo,
+        school: updatedUser.school,
+        al_year: updatedUser.alYear,
+        plan: updatedUser.plan,
+        subject_stream: updatedUser.subjectStream,
+        medium: updatedUser.medium,
+        role: updatedUser.role,
+        questions_answered_this_month: updatedUser.questionsAnsweredThisMonth,
+        papers_answered_this_month: updatedUser.papersAnsweredThisMonth,
+        last_reset_date: updatedUser.lastResetDate
+      })
+      .eq('id', updatedUser.id);
+
+    if (error) {
+      console.error("Error updating profile:", error);
     }
   };
 
@@ -123,8 +174,16 @@ const App: React.FC = () => {
     setCurrentPage('exam');
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser }}>
       <div className="min-h-screen bg-slate-50">
         {currentPage === 'home' && <LandingPage onNavigateToRegister={navigateToRegister} onLogin={() => setCurrentPage('login')} />}
         {currentPage === 'register' && <RegisterPage selectedPlan={selectedPlan} onLogin={() => setCurrentPage('login')} />}
