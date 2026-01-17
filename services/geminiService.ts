@@ -1,5 +1,29 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { Medium, MCQQuestion } from "../types.ts";
+
+/**
+ * Extracts JSON from a string, even if surrounded by markdown or extra text.
+ */
+const extractJson = (text: string): any => {
+  try {
+    // Attempt direct parse first
+    return JSON.parse(text);
+  } catch (e) {
+    // Attempt to find JSON array or object using markers
+    const startIdx = text.indexOf('[');
+    const endIdx = text.lastIndexOf(']');
+    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+      const jsonStr = text.substring(startIdx, endIdx + 1);
+      try {
+        return JSON.parse(jsonStr);
+      } catch (innerE) {
+        console.error("Failed to parse extracted JSON segment:", innerE);
+      }
+    }
+    throw new Error("No valid JSON found in model response");
+  }
+};
 
 export const generateQuestions = async (
   subject: string,
@@ -8,29 +32,33 @@ export const generateQuestions = async (
   topic: string = "general",
   type: 'quick' | 'topic' | 'past' | 'model' = 'quick'
 ): Promise<MCQQuestion[]> => {
-  // Switched to Flash for significantly faster response times (addresses "loading too more time")
   const model = "gemini-3-flash-preview";
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   let specialization = "";
   if (type === 'past') {
-    specialization = "The questions should mimic the style, difficulty, and structure of real Sri Lankan A/L Past Papers from previous years (2010-2023). Focus on common repeating patterns.";
+    specialization = "Style: Sri Lankan A/L Past Papers (2010-2024). High accuracy on standard question patterns.";
   } else if (type === 'model') {
-    specialization = "Generate challenging 'Model Paper' style questions that test deep application of theories, similar to those found in elite school model papers or high-difficulty trial exams.";
+    specialization = "Style: Advanced Model Papers. Deep application-level questions testing edge cases of theories.";
   } else if (type === 'topic') {
-    specialization = `Focus EXCLUSIVELY on the topic: "${topic}". Do not include questions from other units.`;
+    specialization = `Strictly focus on the unit/topic: "${topic}".`;
   }
 
-  const systemInstruction = `You are an expert Sri Lankan Advanced Level (A/L) examiner. 
-  Generate high-quality multiple choice questions (MCQs) for the subject: ${subject}.
-  The questions must be strictly based on the Sri Lankan Ministry of Education teacher guides and syllabus.
-  Language: ${medium}.
-  ${specialization}
-  For each question, provide 5 options (common for SL A/L), the index of the correct answer (0-4), and a detailed explanation.
-  Ensure the tone and technical terms are accurate for the ${medium} medium SL A/L curriculum.
-  CRITICAL: Return ONLY a raw JSON array. No markdown, no backticks, no "json" labels.`;
+  const systemInstruction = `You are a Senior Sri Lankan A/L Examiner.
+Subject: ${subject}
+Medium: ${medium}
+Syllabus: Official Ministry of Education Sri Lanka.
+Task: Generate ${count} high-quality MCQs.
 
-  const prompt = `Generate ${count} MCQ questions for SL A/L ${subject} in ${medium} language. Topic: ${topic}.`;
+Requirements for each question:
+1. Clear question text.
+2. Exactly 5 options (SL A/L standard).
+3. correctAnswerIndex (0-4).
+4. Concise pedagogical explanation.
+
+CRITICAL: Return ONLY a valid JSON array. Ensure all technical terms match the ${medium} medium curriculum.`;
+
+  const prompt = `Generate ${count} MCQs for SL A/L ${subject} (${medium}). Topic: ${topic}. Purpose: ${type} exam.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -39,6 +67,8 @@ export const generateQuestions = async (
       config: {
         systemInstruction,
         responseMimeType: "application/json",
+        // Setting a high token limit to avoid truncation of JSON which causes parsing errors
+        maxOutputTokens: 8192,
         responseSchema: {
           type: Type.ARRAY,
           items: {
@@ -60,19 +90,20 @@ export const generateQuestions = async (
       }
     });
 
-    const text = response.text;
-    // Remove any accidental markdown formatting if present
-    const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
-    const questions = JSON.parse(cleanJson);
+    if (!response.text) {
+      console.warn("Empty response from AI - possibly safety blocked");
+      return [];
+    }
+
+    const questions = extractJson(response.text);
     
     if (!Array.isArray(questions) || questions.length === 0) {
-      throw new Error("Invalid or empty question array returned from AI");
+      return [];
     }
 
     return questions;
   } catch (error) {
-    console.error("Critical Error in Question Generation:", error);
-    // Return empty array so the UI can handle the error state gracefully
+    console.error("Generation service failure:", error);
     return [];
   }
 };
@@ -86,19 +117,12 @@ export const generateSimplerExplanation = async (
   const model = "gemini-3-flash-preview";
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-  const systemInstruction = `You are a legendary A/L tutor in Sri Lanka known for breaking down complex concepts into simple, unforgettable analogies.
-  A student is struggling with a highly technical explanation for a ${subject} MCQ.
-  
-  Your Goal:
-  1. Translate the jargon into simple, everyday language.
-  2. Use a relatable analogy (e.g., comparing electricity to water flow, or cell components to a factory).
-  3. Ensure the core logic remains 100% accurate to the Sri Lankan Ministry of Education syllabus.
-  4. Language MUST be ${medium}.`;
+  const systemInstruction = `Help an A/L student understand a difficult ${subject} concept. 
+  Language: ${medium}. 
+  Explain the logic using a simple, relatable analogy. 
+  Keep it short and encouraging.`;
 
-  const prompt = `Student Question: ${question}
-  Standard Technical Explanation: ${originalExplanation}
-  
-  Please provide a simplified, "common sense" version of why the correct answer is right. Use ${medium}.`;
+  const prompt = `Question: ${question}\nTechnical Explanation: ${originalExplanation}`;
 
   try {
     const response = await ai.models.generateContent({
@@ -106,13 +130,13 @@ export const generateSimplerExplanation = async (
       contents: prompt,
       config: {
         systemInstruction,
-        temperature: 0.8,
+        temperature: 0.7,
+        maxOutputTokens: 1024
       }
     });
 
-    return response.text.trim();
+    return response.text || "I couldn't simplify this right now, but focus on the core principles mentioned above.";
   } catch (error) {
-    console.error("Error generating simplified explanation:", error);
-    return "I'm having a bit of trouble simplifying this right now. Please try again in a moment.";
+    return "Simplified tutor engine is currently offline. Please use the standard explanation.";
   }
 };

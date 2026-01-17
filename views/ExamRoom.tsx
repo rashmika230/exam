@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../App.tsx';
 import { MCQQuestion, PlanType } from '../types.ts';
@@ -60,8 +61,6 @@ const SimplifiedExplanationBox: React.FC<{
         <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest group-hover:text-indigo-600 transition-colors">
           {loading ? 'Consulting Tutor Engine...' : 'Too complex? Request simpler explanation'}
         </span>
-        
-        <div className="absolute inset-0 bg-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
       </button>
     </div>
   );
@@ -80,23 +79,28 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
   const [isTimeout, setIsTimeout] = useState(false);
   const timerRef = useRef<any>(null);
 
+  // Use refs to access latest state in timers/callbacks
+  const questionsRef = useRef<MCQQuestion[]>([]);
   const answersRef = useRef<number[]>([]);
   const viewStateRef = useRef(viewState);
-  const questionsRef = useRef<MCQQuestion[]>([]);
 
   useEffect(() => {
+    questionsRef.current = questions;
     answersRef.current = answers;
     viewStateRef.current = viewState;
-    questionsRef.current = questions;
-  }, [answers, viewState, questions]);
+  }, [questions, answers, viewState]);
 
   const fetchQuestions = async () => {
     if (!user) return;
     setLoading(true);
     setError(null);
+    setQuestions([]); // Clear existing questions
+    setCurrentIdx(0);
+    setAnswers([]);
     
-    let count = 10;
-    if (type === 'past' || type === 'model') count = 25; // Adjusted down from 50 for faster generation
+    // Limits based on plan and type
+    let count = 5; // Reduced default count to ensure high success rate
+    if (type === 'past' || type === 'model') count = 10; 
     if (user.plan === PlanType.FREE) count = Math.min(count, 20 - user.questionsAnsweredThisMonth);
 
     try {
@@ -104,14 +108,13 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
       if (q && q.length > 0) {
         setQuestions(q);
         if (isTimed) {
-          setTimeLeft(q.length * 72); 
+          setTimeLeft(q.length * 72); // 72 seconds per MCQ (Standard A/L time)
         }
       } else {
-        setError("Unable to generate questions for this topic. Please try a different unit or check your connection.");
+        setError("Lumina failed to generate standard questions. This can happen if the AI triggers a safety filter or is under high load.");
       }
     } catch (e) {
-      console.error("Failed to load questions", e);
-      setError("A system error occurred. Please try again.");
+      setError("A system crash occurred during generation. Please try again or refresh.");
     } finally {
       setLoading(false);
     }
@@ -128,7 +131,7 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
           if (prev <= 1) {
             clearInterval(timerRef.current);
             setIsTimeout(true);
-            calculateResult(true); 
+            calculateResult(); 
             return 0;
           }
           return prev - 1;
@@ -155,7 +158,7 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
     }
   };
 
-  const calculateResult = async (fromTimeout: boolean = false) => {
+  const calculateResult = async () => {
     if (viewStateRef.current !== 'testing') return;
     if (timerRef.current) clearInterval(timerRef.current);
 
@@ -174,25 +177,24 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
       const updatedUser = {
         ...user,
         questionsAnsweredThisMonth: user.questionsAnsweredThisMonth + currentQuestions.length,
-        papersAnsweredThisMonth: user.papersAnsweredThisMonth + (currentQuestions.length >= 25 ? 1 : 0)
+        papersAnsweredThisMonth: user.papersAnsweredThisMonth + (currentQuestions.length >= 10 ? 1 : 0)
       };
       await updateUser(updatedUser);
     }
   };
 
   const formatTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
+    const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${hours > 0 ? hours + ':' : ''}${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-slate-50">
         <div className="w-16 h-16 border-[5px] border-indigo-100 border-t-indigo-600 rounded-full animate-spin mb-8"></div>
-        <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-2 animate-pulse">Compiling Syllabus Content...</h2>
-        <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">National Curriculum Engine Active</p>
+        <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-2 animate-pulse">Generating Exam Content...</h2>
+        <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">National Syllabus Mastery Engine Active</p>
       </div>
     );
   }
@@ -203,8 +205,8 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
         <div className="w-20 h-20 bg-red-50 text-red-500 rounded-[2rem] flex items-center justify-center mb-8">
            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
         </div>
-        <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-4">{error || "No Questions Found"}</h2>
-        <p className="text-slate-500 max-w-sm mb-10 font-medium">Lumina was unable to retrieve questions for this specific request. This can happen due to safety filters or specific curriculum complexities.</p>
+        <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-4">Generation Error</h2>
+        <p className="text-slate-500 max-w-sm mb-10 font-medium">{error || "No valid questions were returned. Please try again."}</p>
         <div className="flex gap-4">
           <button onClick={fetchQuestions} className="px-10 py-4 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl">Retry Generation</button>
           <button onClick={onFinish} className="px-10 py-4 bg-white border border-slate-200 text-slate-500 rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all">Go Back</button>
@@ -215,59 +217,21 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
 
   if (viewState === 'summary') {
     const percentage = Math.round((score / questions.length) * 100);
-    const getFeedback = () => {
-      if (isTimeout) return "Time Expired!";
-      if (percentage >= 75) return "Excellent Achievement!";
-      if (percentage >= 40) return "Great Effort, Keep Practicing!";
-      return "Focus on Fundamentals.";
-    };
-
     return (
-      <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50 relative overflow-hidden">
-        <div className="bg-white rounded-[4rem] shadow-[0_32px_80px_-24px_rgba(0,0,0,0.1)] p-12 md:p-16 max-w-2xl w-full text-center border border-white relative z-10 animate-fade-up">
-          <div className={`inline-flex items-center justify-center w-24 h-24 rounded-[2rem] text-white mb-10 shadow-2xl ${isTimeout ? 'bg-amber-500 shadow-amber-200' : 'bg-indigo-600 shadow-indigo-200'}`}>
-            {isTimeout ? (
-              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            ) : (
-              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138z" /></svg>
-            )}
+      <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
+        <div className="bg-white rounded-[4rem] shadow-xl p-12 md:p-16 max-w-2xl w-full text-center border border-white animate-fade-up">
+          <div className="inline-flex items-center justify-center w-24 h-24 rounded-[2rem] bg-indigo-600 text-white mb-10 shadow-2xl">
+            <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           </div>
-          
-          <p className={`${isTimeout ? 'text-amber-600' : 'text-indigo-600'} font-black text-[10px] uppercase tracking-[0.4em] mb-4`}>
-            {isTimeout ? 'Timer Depleted' : 'Result Summary'}
-          </p>
-          <h2 className="text-4xl font-black mb-12 text-slate-900 tracking-tight leading-tight">
-            {getFeedback()}
-          </h2>
-
-          <div className="grid grid-cols-3 gap-6 mb-16">
-            <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 flex flex-col items-center justify-center">
-              <span className="text-3xl font-black text-indigo-600 mb-1">{score}</span>
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Correct</span>
-            </div>
-            <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 flex flex-col items-center justify-center">
-              <span className="text-3xl font-black text-slate-900 mb-1">{questions.length}</span>
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Questions</span>
-            </div>
-            <div className="bg-slate-900 p-8 rounded-[2.5rem] border border-slate-800 flex flex-col items-center justify-center shadow-lg shadow-slate-200">
-              <span className="text-3xl font-black text-white mb-1">{percentage}%</span>
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Score</span>
-            </div>
+          <h2 className="text-4xl font-black mb-6 text-slate-900 tracking-tight">Performance Summary</h2>
+          <div className="grid grid-cols-3 gap-6 mb-12">
+            <div className="bg-slate-50 p-6 rounded-3xl"><p className="text-3xl font-black text-indigo-600">{score}</p><p className="text-[10px] uppercase font-black text-slate-400">Correct</p></div>
+            <div className="bg-slate-50 p-6 rounded-3xl"><p className="text-3xl font-black text-slate-900">{questions.length}</p><p className="text-[10px] uppercase font-black text-slate-400">Total</p></div>
+            <div className="bg-slate-950 p-6 rounded-3xl"><p className="text-3xl font-black text-white">{percentage}%</p><p className="text-[10px] uppercase font-black text-slate-400">Score</p></div>
           </div>
-
           <div className="flex flex-col gap-4">
-            <button 
-              onClick={() => setViewState('review')} 
-              className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-indigo-600 shadow-2xl transition-all active:scale-[0.98]"
-            >
-              Analyze Answers
-            </button>
-            <button 
-              onClick={onFinish} 
-              className="w-full py-6 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] text-slate-400 hover:text-slate-600 transition-all"
-            >
-              Back to Dashboard
-            </button>
+            <button onClick={() => setViewState('review')} className="w-full bg-slate-900 text-white py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest hover:bg-indigo-600 shadow-xl transition-all">Review Answers</button>
+            <button onClick={onFinish} className="w-full py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest text-slate-400">Return to Dashboard</button>
           </div>
         </div>
       </div>
@@ -276,48 +240,30 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
 
   if (viewState === 'review') {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center relative">
-        <header className="sticky top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100 py-6 px-10 flex justify-between items-center">
-          <div>
-            <h2 className="text-xl font-black text-slate-900">{subject}</h2>
-            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Performance Review</p>
-          </div>
-          <button onClick={onFinish} className="bg-slate-950 text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 transition-all">Exit Review</button>
+      <div className="min-h-screen bg-slate-50 pb-32">
+        <header className="bg-white/80 backdrop-blur-xl border-b border-slate-100 py-6 px-10 sticky top-0 z-50 flex justify-between items-center">
+          <h2 className="text-xl font-black text-slate-900">Review: {subject}</h2>
+          <button onClick={onFinish} className="bg-slate-950 text-white px-8 py-3 rounded-xl font-black text-xs tracking-widest uppercase">Close</button>
         </header>
-
-        <div className="max-w-3xl w-full p-6 pb-32 space-y-8 animate-fade-up">
+        <div className="max-w-3xl mx-auto p-6 space-y-8 mt-12">
           {questions.map((q, i) => (
-            <div key={i} className={`p-10 rounded-[3.5rem] border-2 flex flex-col gap-6 bg-white shadow-sm transition-all hover:shadow-md ${answers[i] === q.correctAnswerIndex ? 'border-emerald-50' : 'border-red-50'}`}>
-              <div className="flex justify-between items-start">
-                <div>
-                  <span className="inline-block px-3 py-1 rounded-lg bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Question {i+1}</span>
-                  <p className="font-bold text-slate-800 leading-relaxed text-xl">{q.question}</p>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-5 rounded-3xl border-2 border-emerald-100/50 bg-emerald-50/10">
-                  <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-2">Correct Option</p>
-                  <p className="text-sm font-bold text-slate-700">{q.options[q.correctAnswerIndex]}</p>
-                </div>
-                {answers[i] !== q.correctAnswerIndex && (
-                  <div className="p-5 rounded-3xl border-2 border-red-100/50 bg-red-50/10">
-                    <p className="text-[9px] font-black text-red-600 uppercase tracking-widest mb-2 flex items-center gap-2">Your Answer</p>
-                    <p className="text-sm font-bold text-slate-700">{q.options[answers[i]] || "Skipped"}</p>
+            <div key={i} className={`p-10 rounded-[3rem] border-2 bg-white ${answers[i] === q.correctAnswerIndex ? 'border-emerald-50' : 'border-red-50'}`}>
+              <p className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">Question {i+1}</p>
+              <p className="text-xl font-bold text-slate-800 mb-8">{q.question}</p>
+              <div className="grid grid-cols-1 gap-3 mb-8">
+                {q.options.map((opt, optIdx) => (
+                  <div key={optIdx} className={`p-5 rounded-2xl border-2 font-bold text-sm ${optIdx === q.correctAnswerIndex ? 'bg-emerald-50 border-emerald-500 text-emerald-900' : optIdx === answers[i] ? 'bg-red-50 border-red-500 text-red-900' : 'bg-slate-50 border-slate-50 text-slate-500'}`}>
+                    {opt}
                   </div>
-                )}
+                ))}
               </div>
-
-              <div className="pt-8 mt-4 border-t border-slate-100">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">Curriculum Explanation</p>
+              <div className="pt-6 border-t border-slate-50">
+                <p className="text-[10px] font-black uppercase text-indigo-600 mb-2">Pedagogical Explanation</p>
                 <p className="text-sm font-medium text-slate-600 leading-relaxed">{q.explanation}</p>
                 <SimplifiedExplanationBox subject={subject} question={q.question} originalExplanation={q.explanation} medium={user?.medium} />
               </div>
             </div>
           ))}
-          <div className="py-20 text-center">
-            <button onClick={onFinish} className="bg-slate-900 text-white px-16 py-6 rounded-[2.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-indigo-600 shadow-2xl transition-all">Exit Performance Review</button>
-          </div>
         </div>
       </div>
     );
@@ -328,50 +274,46 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center">
-      <header className="sticky top-0 w-full z-[60] bg-white/90 backdrop-blur-2xl border-b border-slate-100 py-6 px-10 shadow-sm">
-        <div className="max-w-5xl mx-auto flex justify-between items-center gap-6">
-          <div className="flex items-center gap-6">
-            <div className="hidden md:block">
-              <h2 className="text-xl font-black text-slate-900 tracking-tight">{subject}</h2>
-              <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">National Syllabus MCQ Exam</p>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Session Progress</span>
-              <div className="flex items-center gap-3">
-                 <div className="w-32 md:w-48 h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-600 transition-all duration-700 ease-out" style={{ width: `${progress}%` }}></div>
-                 </div>
-                 <span className="text-xs font-black text-slate-900 tabular-nums">{currentIdx + 1} / {questions.length}</span>
+      <header className="w-full bg-white border-b border-slate-100 py-6 px-10 flex justify-between items-center sticky top-0 z-50">
+        <div className="flex items-center gap-6">
+          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
+             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253" /></svg>
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-slate-900 tracking-tight leading-none">{subject}</h2>
+            <div className="flex items-center gap-2 mt-2">
+              <div className="w-32 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-indigo-600 transition-all duration-500" style={{ width: `${progress}%` }}></div>
               </div>
+              <span className="text-[10px] font-black text-slate-400 tabular-nums uppercase">{currentIdx + 1}/{questions.length}</span>
             </div>
           </div>
-          {isTimed && (
-            <div className={`px-8 py-3 rounded-2xl border-2 flex flex-col items-center ${timeLeft < 30 ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' : 'bg-white border-slate-100 text-slate-900 shadow-sm'}`}>
-              <span className="text-[8px] font-black uppercase tracking-[0.3em] mb-0.5">Time Remaining</span>
-              <span className="text-2xl font-black tracking-tighter tabular-nums leading-none">{formatTime(timeLeft)}</span>
-            </div>
-          )}
         </div>
+        {isTimed && (
+          <div className={`px-6 py-2 rounded-xl border-2 font-black tabular-nums transition-colors ${timeLeft < 30 ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' : 'bg-slate-50 border-slate-100 text-slate-600'}`}>
+            {formatTime(timeLeft)}
+          </div>
+        )}
       </header>
 
-      <main className="max-w-4xl w-full p-6 pt-12 pb-32 flex flex-col flex-1">
-        <div className="bg-white rounded-[4rem] shadow-[0_40px_100px_-30px_rgba(0,0,0,0.06)] border border-white p-12 md:p-20 relative animate-fade-up">
-           <h3 className="text-2xl md:text-3xl font-bold mb-16 leading-relaxed text-slate-800">{q?.question}</h3>
-           <div className="grid grid-cols-1 gap-4">
+      <main className="max-w-4xl w-full p-6 pt-12 pb-32">
+        <div className="bg-white rounded-[3.5rem] shadow-xl border border-white p-12 md:p-20 animate-fade-up">
+          <h3 className="text-2xl md:text-3xl font-bold mb-16 leading-relaxed text-slate-800">{q?.question}</h3>
+          <div className="grid grid-cols-1 gap-4">
             {q?.options?.map((opt, i) => (
-              <button key={i} onClick={() => handleAnswer(i)} className={`group w-full flex items-center gap-8 p-6 rounded-[2rem] border-2 transition-all text-left relative overflow-hidden ${answers[currentIdx] === i ? 'border-indigo-600 bg-indigo-50/50 shadow-xl' : 'border-slate-50 bg-slate-50 hover:border-slate-200 hover:bg-white'}`}>
-                <div className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center font-black text-base border-2 transition-all ${answers[currentIdx] === i ? 'bg-indigo-600 text-white border-indigo-600' : 'text-slate-400 border-slate-100 bg-white group-hover:border-indigo-200 group-hover:text-indigo-400'}`}>
+              <button key={i} onClick={() => handleAnswer(i)} className={`group w-full flex items-center gap-6 p-6 rounded-[2rem] border-2 transition-all text-left ${answers[currentIdx] === i ? 'border-indigo-600 bg-indigo-50 shadow-md' : 'border-slate-50 bg-slate-50 hover:border-slate-200 hover:bg-white'}`}>
+                <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center font-black text-sm border-2 transition-all ${answers[currentIdx] === i ? 'bg-indigo-600 text-white border-indigo-600' : 'text-slate-400 border-slate-100 bg-white'}`}>
                   {String.fromCharCode(65 + i)}
                 </div>
-                <span className={`text-lg font-bold transition-colors ${answers[currentIdx] === i ? 'text-indigo-950' : 'text-slate-600 group-hover:text-slate-900'}`}>{opt}</span>
+                <span className={`text-lg font-bold ${answers[currentIdx] === i ? 'text-indigo-950' : 'text-slate-600'}`}>{opt}</span>
               </button>
             ))}
           </div>
         </div>
-        <div className="mt-12 flex gap-6 items-center">
-          <button disabled={currentIdx === 0} onClick={() => setCurrentIdx(prev => prev - 1)} className="h-20 px-10 rounded-[2rem] font-black text-xs uppercase tracking-widest text-slate-400 border border-slate-200 hover:bg-white hover:text-slate-900 disabled:opacity-0">Previous</button>
-          <button disabled={answers[currentIdx] === undefined} onClick={nextQuestion} className="h-20 flex-1 bg-slate-950 text-white rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] hover:bg-indigo-600 shadow-2xl transition-all disabled:opacity-30 flex items-center justify-center gap-4">
-            {currentIdx === questions.length - 1 ? 'Complete Examination' : 'Confirm & Next'}
+        <div className="mt-12 flex gap-6">
+          <button disabled={currentIdx === 0} onClick={() => setCurrentIdx(prev => prev - 1)} className="px-10 py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest text-slate-400 border border-slate-200 hover:text-slate-900 hover:bg-white disabled:opacity-0 transition-all">Previous</button>
+          <button disabled={answers[currentIdx] === undefined} onClick={nextQuestion} className="flex-1 bg-slate-950 text-white py-5 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:bg-indigo-600 transition-all disabled:opacity-30">
+            {currentIdx === questions.length - 1 ? 'Complete Exam' : 'Next Question'}
           </button>
         </div>
       </main>
