@@ -97,7 +97,7 @@ const Dashboard: React.FC<DashboardProps> = ({ startExam, onAdminClick }) => {
   };
 
   return (
-    <div className="min-h-screen pb-32 selection:bg-indigo-100">
+    <div className="min-h-screen selection:bg-indigo-100 flex flex-col">
       <nav className="bg-white/80 backdrop-blur-xl border-b border-slate-100 px-10 py-5 flex justify-between items-center sticky top-0 z-50">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-indigo-600 rounded-xl text-white flex items-center justify-center shadow-lg shadow-indigo-100">
@@ -121,7 +121,7 @@ const Dashboard: React.FC<DashboardProps> = ({ startExam, onAdminClick }) => {
         </div>
       </nav>
 
-      <div className="max-w-7xl mx-auto p-10 animate-fade-up">
+      <div className="max-w-7xl mx-auto p-10 animate-fade-up flex-grow">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 mb-20">
           <div className="bg-[#0a0c10] p-12 rounded-[3.5rem] text-white shadow-2xl lg:col-span-2 relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-600/10 rounded-full blur-[100px] -mr-40 -mt-40 transition-transform duration-1000 group-hover:scale-110"></div>
@@ -179,7 +179,7 @@ const Dashboard: React.FC<DashboardProps> = ({ startExam, onAdminClick }) => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mb-20">
           {subjects.map((sub, index) => (
             <div key={sub} className={`bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group/card animate-fade-up`} style={{ animationDelay: `${400 + (index * 100)}ms` }}>
               <div className="flex justify-between items-center mb-8">
@@ -220,6 +220,31 @@ const Dashboard: React.FC<DashboardProps> = ({ startExam, onAdminClick }) => {
         </div>
       </div>
 
+      <footer className="py-24 bg-slate-950 border-t border-slate-800 mt-auto">
+        <div className="max-w-7xl mx-auto px-10 flex flex-col md:flex-row justify-between items-center gap-12">
+          <div className="flex flex-col items-center md:items-start gap-4">
+            <div className="flex items-center gap-3">
+               <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center text-white">
+                 <GraduationCapIcon className="w-6 h-6" />
+               </div>
+               <span className="text-2xl font-black tracking-tight text-white">Lumina Exam</span>
+            </div>
+            <p className="text-slate-500 font-medium text-sm">Empowering the next generation of professionals.</p>
+          </div>
+          <div className="flex gap-12 font-black text-[10px] uppercase tracking-widest text-slate-500">
+            <a href="#" className="hover:text-indigo-400 transition-colors">Curriculum</a>
+            <a href="#" className="hover:text-indigo-400 transition-colors">Privacy Policy</a>
+            <a href="#" className="hover:text-indigo-400 transition-colors">Admissions</a>
+            <a href={UPGRADE_URL} target="_blank" rel="noopener noreferrer" className="hover:text-indigo-400 transition-colors">Support</a>
+          </div>
+          <div className="text-right">
+             <p className="text-white font-black text-xs">&copy; 2026 Lumina Education.</p>
+             <p className="text-slate-600 font-bold text-[10px] mt-1">Made with Excellence in Sri Lanka</p>
+             <p className="text-slate-500 font-black text-[9px] mt-1 uppercase tracking-widest">By K.A.V.Rashmika</p>
+          </div>
+        </div>
+      </footer>
+
       {selectingTopicFor && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xl flex items-center justify-center p-6 z-[100]">
           <div className="bg-white rounded-[3rem] p-12 max-w-lg w-full shadow-2xl border border-slate-100">
@@ -234,7 +259,6 @@ const Dashboard: React.FC<DashboardProps> = ({ startExam, onAdminClick }) => {
         </div>
       )}
 
-      {/* WhatsApp Chat Widget */}
       <WhatsAppWidget message={`Hello Lumina Support, I'm ${user.preferredName} and I need help with my ${user.subjectStream} studies.`} />
     </div>
   );

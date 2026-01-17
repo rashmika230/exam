@@ -1,10 +1,12 @@
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
 
-// Shim process.env for browser compatibility to prevent ReferenceErrors
+// Surgical environment initialization
 if (typeof window !== 'undefined') {
-  (window as any).process = (window as any).process || { env: { API_KEY: '' } };
+  (window as any).process = (window as any).process || {};
+  (window as any).process.env = (window as any).process.env || {};
 }
 
 const rootElement = document.getElementById('root');

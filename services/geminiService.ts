@@ -8,7 +8,6 @@ import { Medium, MCQQuestion } from "../types.ts";
 const extractJsonArray = (text: string): any[] => {
   try {
     const cleanText = text.trim();
-    // Try to find the first array [
     const startIdx = cleanText.indexOf('[');
     const endIdx = cleanText.lastIndexOf(']');
     
@@ -16,8 +15,6 @@ const extractJsonArray = (text: string): any[] => {
       const jsonStr = cleanText.substring(startIdx, endIdx + 1);
       return JSON.parse(jsonStr);
     }
-    
-    // Fallback: try direct parse
     return JSON.parse(cleanText);
   } catch (e) {
     console.error("JSON Extraction Error:", e, "Raw Text:", text);
@@ -32,41 +29,35 @@ export const generateQuestions = async (
   topic: string = "general",
   type: 'quick' | 'topic' | 'past' | 'model' = 'quick'
 ): Promise<MCQQuestion[]> => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey || apiKey.trim() === '') {
-    throw new Error("System configuration error: API Key is missing. Please ensure your environment is correctly configured.");
-  }
-
+  // Use the platform-provided API key directly
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const modelName = "gemini-3-flash-preview";
-  const ai = new GoogleGenAI({ apiKey });
   
   const safeSubject = subject || "General";
   const safeTopic = topic || "General Syllabus";
 
   let styleGuide = "";
   if (type === 'past') {
-    styleGuide = "Structure: Mimic Sri Lankan A/L National Past Papers. High technical accuracy required.";
+    styleGuide = "Mimic Sri Lankan A/L National Past Papers structure accurately.";
   } else if (type === 'model') {
-    styleGuide = "Structure: Challenging Model Exam. Focus on multi-step reasoning and application.";
+    styleGuide = "Challenging Model Exam style focusing on syllabus application.";
   } else if (type === 'topic') {
-    styleGuide = `Strictly focus only on: ${safeTopic}.`;
+    styleGuide = `Focus strictly on the curriculum unit: ${safeTopic}.`;
   }
 
-  const systemInstruction = `You are a Senior Sri Lankan A/L Examiner for ${safeSubject}.
-Language: ${medium}
-Syllabus: Ministry of Education Sri Lanka Official Teacher Guides.
+  const systemInstruction = `You are an expert Sri Lankan A/L Examiner for ${safeSubject}.
+Medium: ${medium}
+Syllabus: Official Ministry of Education Sri Lanka Teacher Guides and Syllabuses.
 
-Task: Generate ${count} MCQ questions.
+Task: Generate ${count} MCQ questions based on the A/L curriculum.
 Rules:
-- Exactly 5 options per question.
+- 5 options per question.
 - 1 correct answer index (0-4).
-- Clear, syllabus-accurate explanation.
+- Provide a detailed pedagogical explanation for the correct answer.
 
-${styleGuide}
+Return ONLY a raw JSON array. Technical terms must be standard for the ${medium} medium in Sri Lanka.`;
 
-CRITICAL: Return ONLY a raw JSON array. Technical terms must be standard for the ${medium} medium in the SL A/L curriculum.`;
-
-  const prompt = `Generate ${count} MCQ questions for A/L ${safeSubject} in ${medium}. Topic: ${safeTopic}. Plan: ${type}.`;
+  const prompt = `Generate ${count} MCQ questions for A/L ${safeSubject} in ${medium}. Topic context: ${safeTopic}. Session type: ${type}.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -75,8 +66,7 @@ CRITICAL: Return ONLY a raw JSON array. Technical terms must be standard for the
       config: {
         systemInstruction,
         responseMimeType: "application/json",
-        temperature: 0.3,
-        maxOutputTokens: 4000,
+        temperature: 0.4,
         responseSchema: {
           type: Type.ARRAY,
           items: {
@@ -98,29 +88,17 @@ CRITICAL: Return ONLY a raw JSON array. Technical terms must be standard for the
       }
     });
 
-    // Check if candidates exist (safety filter might have blocked all content)
-    if (!response.candidates || response.candidates.length === 0 || !response.candidates[0].content) {
-      throw new Error("Content generation was blocked by safety filters. Please try a different topic.");
-    }
-
     const text = response.text;
-    if (!text) return [];
+    if (!text) throw new Error("The curriculum engine returned an empty response. Please try again.");
 
     const questions = extractJsonArray(text);
+    if (questions.length === 0) throw new Error("Failed to parse the curriculum data. Please retry with a more specific topic.");
     
-    // Final filtering to ensure valid data
-    return questions.filter(q => 
-      q.question && 
-      Array.isArray(q.options) && 
-      q.options.length === 5 && 
-      typeof q.correctAnswerIndex === 'number' &&
-      q.correctAnswerIndex >= 0 &&
-      q.correctAnswerIndex < 5
-    );
+    return questions.filter(q => q.question && Array.isArray(q.options) && q.options.length === 5);
   } catch (error: any) {
-    console.error("Gemini Generation Exception:", error);
-    // Rethrow to let the UI catch block handle specific error messages
-    throw error;
+    console.error("Lumina Connection Error:", error);
+    // Pass the actual SDK error message back to the UI for better transparency
+    throw new Error(error.message || "A secure connection to the Lumina engine could not be established.");
   }
 };
 
@@ -130,23 +108,20 @@ export const generateSimplerExplanation = async (
   originalExplanation: string,
   medium: Medium
 ): Promise<string> => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) return "Configuration error: API Key missing.";
-
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const modelName = "gemini-3-flash-preview";
-  const ai = new GoogleGenAI({ apiKey });
 
-  const systemInstruction = `You are a tutor in Sri Lanka. Simplify this technical A/L ${subject} explanation using a relatable analogy. Language: ${medium}.`;
+  const systemInstruction = `You are a friendly Sri Lankan tutor. Simplify this technical A/L ${subject} concept using an easy-to-understand analogy. Language: ${medium}.`;
 
   try {
     const response = await ai.models.generateContent({
       model: modelName,
-      contents: `Q: ${question}\nExplanation: ${originalExplanation}`,
+      contents: `Question: ${question}\nTechnical Explanation: ${originalExplanation}`,
       config: { systemInstruction, temperature: 0.8 }
     });
 
-    return response.text || "Couldn't simplify at this moment.";
+    return response.text || "I'm having trouble simplifying this right now.";
   } catch (error) {
-    return "The simplified tutor engine is currently offline.";
+    return "The simplified tutor service is temporarily unavailable.";
   }
 };

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { User, PlanType, Medium, SubjectStream } from './types.ts';
 import LandingPage from './views/LandingPage.tsx';
@@ -140,9 +141,18 @@ const App: React.FC = () => {
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setCurrentPage('home');
+    try {
+      // Optimistically clear UI state immediately for better UX
+      setUser(null);
+      setCurrentPage('home');
+      // Attempt sign out from Supabase
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error("Logout error (Supabase):", e);
+      // Ensure state is cleared even if network fails
+      setUser(null);
+      setCurrentPage('home');
+    }
   };
 
   const updateUser = async (updatedUser: User) => {

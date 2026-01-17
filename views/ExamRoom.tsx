@@ -134,7 +134,7 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
       }
     } catch (e: any) {
       console.error("Fetch Failure:", e);
-      setError(e.message || "A connection error occurred. Please verify your internet and try again.");
+      setError(e.message || "A secure connection error occurred. Please verify your internet and try again.");
     } finally {
       setLoading(false);
     }
@@ -217,7 +217,7 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
         <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em] mb-12">Authenticating with MOE Curriculum Standards</p>
         <button 
           onClick={onFinish}
-          className="px-10 py-4 bg-white border border-slate-200 text-slate-400 rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:text-slate-600 hover:bg-slate-50 transition-all"
+          className="px-10 py-4 bg-white border-2 border-slate-200 text-slate-400 rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:text-slate-600 hover:border-slate-300 transition-all shadow-sm"
         >
           Exit to Dashboard
         </button>
@@ -232,12 +232,12 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ subject, topic, type, isTimed, onFi
            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
         </div>
         <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-4">Exam Retrieval Failed</h2>
-        <div className="bg-white border border-red-100 p-6 rounded-3xl mb-10 max-w-md w-full shadow-sm">
+        <div className="bg-white border-2 border-red-50 p-6 rounded-3xl mb-10 max-w-md w-full shadow-sm">
            <p className="text-red-500 font-bold text-sm leading-relaxed">{error || "The AI system failed to compile the requested questions."}</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-4">
           <button onClick={fetchQuestions} className="px-10 py-4 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl">Retry Generation</button>
-          <button onClick={onFinish} className="px-10 py-4 bg-white border border-slate-200 text-slate-500 rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all">Return to Dashboard</button>
+          <button onClick={onFinish} className="px-10 py-4 bg-white border-2 border-slate-200 text-slate-500 rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all">Return to Dashboard</button>
         </div>
       </div>
     );
